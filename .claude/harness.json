@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "_why": "Every fact the harness reads lives here, not in prose. Read by .claude/hooks/guard.mjs (spend, dangerous, protected_paths, deploy, reviewer), by the library scripts (checks, branches, artifacts, evidence) and by the session-start hook (project, branches.per_branch, glossary). Validated by the library lint against its schema. _why keys are notes for people; every reader ignores them. Replace each <placeholder>; an empty list is a valid answer.",
+  "project": {
+    "name": "LoreOS",
+    "one_liner": "Self-hostable document Q&A engine with measured retrieval: Python/FastAPI backend, TypeScript/React/Vite frontend, Postgres with pgvector (Supabase), OpenAI for embeddings and answers"
+  },
+  "checks": {
+    "_why": "How the project proves a change. glob names the check files; script_prefix is the package.json script family they are wired under; suite runs everything; quick runs in seconds. ci: set this to your CI workflow file; the wiring check falls back to .github/workflows/ci.yml when it exists, and an empty string is treated as unset. end_anchors are the scripts that stay LAST in both lists (the runner, the wiring check); new checks are appended before them. meta_scripts are scripts in the family that are not check files (runners, wiring) and are exempt from the glob-to-script match. Leave glob empty for a project without checks; the wiring and pin scripts then skip.",
+    "glob": "scripts/check-*.mjs",
+    "script_prefix": "check:",
+    "suite": "npm run check:all",
+    "quick": "npm run check:hooks",
+    "ci": ".github/workflows/ci.yml",
+    "end_anchors": ["check:all"],
+    "meta_scripts": ["check:all"]
+  },
+  "spend": {
+    "_why": "Commands that can bill a provider, a GPU or a metered API. An empty list means nothing in this project spends. A plain string matches as a case-insensitive substring anywhere in the command (\"npm start\", \"probe:\"). An entry starting with \"re:\" is a case-insensitive regex tested against each subcommand (\"re:-X\\\\s+POST\\\\s+\\\\S*/api/jobs\"). An exempt token (\"--dry-run\") exempts only the subcommand it sits in, outside a trailing # comment; the other subcommands are still judged. The guard asks in the main session; it denies inside subagents and for background launches. A regex entry also sees the subcommand without its leading NAME=value assignments and wrapper words (env, nohup, timeout, sudo and the like), so an anchored regex is not hidden by them; a plain entry already matches anywhere. In LoreOS every command that calls OpenAI is a root package.json script named paid:<name> (paid:eval, paid:smoke), so one plain pattern catches them all.",
+    "patterns": ["npm run paid:"],
+    "exempt": ["--help", "-h", "--dry-run"]
+  },
+  "dangerous": {
+    "_why": "Refused outright, in every session and every subagent. \"x *\" matches those tokens followed by anything (and the bare command); \"x*\" matches the prefix; a bare entry matches exactly; an entry starting with \"re:\" is a case-insensitive regex tested against each subcommand. The plain entries are the canonical spellings and mirror the settings.json belt; the regex entries catch the reorderings and aliases the belt misses (flags after the path, git reset HEAD~1 --hard, -Av, ./, :/, *, +branch, rm -fr, Remove-Item -Recurse). In the two delete entries replace output|data|sessions with this project's protected dirs; when no local directory holds data, remove both delete entries and add the project's own destructive commands instead (a database shell's drop, say). Add a project entry when a delete would destroy a checkpoint, a cache that is expensive to rebuild, or a credential store. ask_when_dirty entries prompt only when tracked files have uncommitted changes, because a restore then discards work. A git subcommand is matched with its leading global options removed (git -C <path>, -c <name=value>, --git-dir, --work-tree, --no-pager and the like), and its -C path is the tree the dirty check reads and the worktree-remove target resolves against. Leading NAME=value assignments and wrapper words (env -i, command, builtin, exec, nohup, nice -n, time, timeout 30, stdbuf, sudo -u) and leading shell keywords (!, if, then, elif, else, do, while, until) are removed before that, and every entry is also tested against the raw subcommand, so an entry that names a wrapper still matches. The command is first split the way the shell reads it: a separator (;, &&, ||, |, |&, a single &, a newline) splits subcommands only outside quotes, $'...', ${...} and escapes, and not as a redirection (2>&1, &>), so git reset \"x;y\" --hard stays one subcommand and is refused. Each subcommand is then normalised so a shell rewrite cannot hide it: $'...' and $\"...\" quoting is decoded, ${IFS}/$IFS becomes a space, a backslash-newline joins its lines, and an unquoted brace list ({a,b}, --{hard,quiet}) is expanded and each word judged (a list over 64 words is refused as a brace bomb). Quotes, and in Bash an unquoted backslash, are removed from each word (\"--hard\", g\"\"it, --ha\\rd), and a subshell (...) or group { ...; } is opened, nested too. The guard matches command text and is not a sandbox: variable indirection (X=--hard; git reset $X), eval, bash -c, xargs, a command built from a substitution's output and a script still get past it (the commands inside $(...) are judged), so the settings.json deny rules and the agent's own tools are the other layers. A newline inside quotes stays in its word, as in bash, but every line of a heredoc body is judged as its own subcommand, so a heredoc commit message that quotes a denied command is refused: write the message to a file with the edit tool and commit with -F <file>.",
+    "deny": [
+      "git add -A *",
+      "git add . *",
+      "git add --all *",
+      "git push --force *",
+      "git push -f *",
+      "git reset --hard *",
+      "git clean *",
+      "re:^git\\s+add\\b(?=.*(?:\\s-[A-Za-z]*A[A-Za-z]*\\b|\\s--all\\b|\\s\\.{1,2}/?(?:\\s|$)|\\s:/|\\s\\*(?:\\s|$)|\\s--\\s+\\.{1,2}/?(?:\\s|$)))",
+      "re:^git\\s+push\\b(?=.*(?:\\s--force\\b|\\s-f\\b|\\s--force-with-lease\\b|\\s\\+\\S))",
+      "re:^git\\s+reset\\b(?=.*\\s--hard\\b)",
+      "re:\\balembic\\s+downgrade\\b",
+      "re:^docker\\s+compose\\b(?=.*\\bdown\\b)(?=.*(?:\\s-[A-Za-z]*v[A-Za-z]*\\b|\\s--volumes\\b))",
+      "re:^docker\\s+(?:volume|system)\\s+prune\\b",
+      "re:\\bdrop\\s+(?:table|schema|database)\\b"
+    ],
+    "ask_when_dirty": ["git checkout -- *", "git restore *"]
+  },
+  "protected_paths": {
+    "_why": "Edit-tool targets that need a deliberate yes (ask) or that the model never edits (deny). A bare filename matches at any depth; a path with a slash anchors at the project root; ** crosses directories. Put generated sidecars, credential stores and session state under deny.",
+    "ask": [
+      ".env", ".env.*", "package-lock.json", "uv.lock", "Dockerfile", "docker-compose.yml",
+      ".github/workflows/ci.yml", "**/alembic/versions/**",
+      ".claude/harness.json", ".claude/settings.json", ".claude/hooks/**", ".codex/hooks.json", ".codex/hooks/**"
+    ],
+    "deny": ["eval/results/**"]
+  },
+  "deploy": {
+    "_why": "Two recipes when the project has a running deployment. code_only applies source edits (a bind-mounted restart); env_or_deps is the heavier recipe that reloads environment and dependencies (a rebuild that renews volumes). After an edit to any env_or_deps_triggers path in a session, the guard asks before running the code_only recipe. Shell edits (echo >> .env, npm install) do not arm this rule; only the edit tools do. Leave the strings empty when there is no deployment; the guard then never fires this rule.",
+    "code_only": "",
+    "code_only_aliases": [],
+    "env_or_deps": "",
+    "env_or_deps_triggers": []
+  },
+  "reviewer": {
+    "_why": "Subagents whose agent_type is listed here get a read-only shell: every subcommand must start with an allowed prefix, and any subcommand carrying a redirection (>, >>), a command substitution ($(, backtick, <() or tee is refused whatever its prefix (2>&1 and 2>/dev/null are fine). A prefix ending in \":\" allows any continuation (npm run check:<anything>). Add the project's own read-only check commands; do not add echo (it only writes). An entry also matches the plugin-namespaced agent type with one leading <plugin>: stripped from either side, so harness:reviewer and otherplugin:reviewer match reviewer, while an entry written in full (harness:reviewer) matches itself and the bare name only. Git global options are removed before the allowlist match (git -C <path> status is git status), and -c, --config-env and --exec-path are refused because they can run a command. A subcommand that starts with an assignment or a wrapper word (LANG=C git log, nohup, sudo) is refused, because read-only work needs neither; a leading shell keyword (if, then, !) is stripped and the command behind it judged, so \"then git status\" is allowed. The same normalisation as the deny list runs first, so $'-delete', $\"-delete\", -{delete,print}, find${IFS}.${IFS}-delete, a backslash-newline inside a flag, and a subcommand after a single & or |& are all decoded and judged. A separator splits only outside quotes and escapes, so grep -E \"a|b\" src and git log --format='%h;%s' are each one allowed command, find . -name \"a;ls\" -delete is still refused for -delete, and a command that leaves a quote open is refused. So are quoted or backslash-escaped words and a subshell or group: (find . -delete) and { find . -delete; } are refused, while (git status) is allowed. A subcommand that matches is still refused when it carries a flag through which its tool writes a file or runs a command: find -delete, -exec, -execdir, -ok, -okdir, -fprint, -fprint0, -fprintf and -fls; rg --pre and --hostname-bin; git diff, log and show --output; node -r, --require, --import, --loader, --env-file, --run, --snapshot-blob, the config-file, profile, report, heap-snapshot and inspector flags (with _ for -); npm --, -C, --prefix, --node-options, --script-shell, --userconfig, --globalconfig, --cache and --logs-dir, in every spelling npm reads (one dash, a cut name, a bundle like -gC). An allowlisted script runner (npm test, npm run <x>) still runs whatever that script does, with any plain arguments passed to it, so list only scripts that are read-only.",
+    "agent_types": ["reviewer"],
+    "readonly_allow": [
+      "git log", "git show", "git diff", "git status", "git ls-tree", "git cat-file", "git blame", "git branch --list", "git rev-parse", "git ls-files", "git check-ignore",
+      "ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "stat", "du", "pwd",
+      "node --check", "npm run check:", "npm run test:", "npm run lint:", "npm run typecheck:",
+      "docker compose ps", "docker compose config"
+    ]
+  },
+  "glossary": {
+    "_why": "Say-it-this-way terms. A synonym in a plan, a PR body or the README misleads a reader or overclaims.",
+    "keyword search": { "avoid": ["BM25", "lexical BM25"] },
+    "workspace": { "avoid": ["tenant", "organization", "org"] },
+    "evaluation set": { "avoid": ["benchmark", "test set"] }
+  },
+  "artifacts": { "root": "docs/sdd" },
+  "branches": {
+    "_why": "long_lived are the branches every feature must reach; merge_order is the order they merge in. port is \"none\" for one branch or \"ledger\" when each feature carries a required|waived|done row per branch in its STATUS.md. pr_tool is \"gh\" when the GitHub CLI is installed, else \"none\" (hand over title and body). per_branch holds the facts that differ per branch; the current branch's entry loads at session start, and a feature branch loads the entry of the long-lived branch it is closest to.",
+    "long_lived": ["main"],
+    "merge_order": ["main"],
+    "port": "none",
+    "pr_tool": "gh",
+    "per_branch": {
+      "main": {
+        "facts": [
+          "Decisions and scope for v1 live in docs/sdd/v1/brief.md; read it before planning.",
+          "Planned layout: backend/ (FastAPI, uv, SQLAlchemy, Alembic), frontend/ (React, Vite, strict TypeScript, plus the widget build), eval/ (questions and committed results). Not created yet; P1 creates what it uses.",
+          "Postgres is hosted Supabase, reached only through DATABASE_URL on the session pooler. No Supabase SDK, Auth or Storage.",
+          "The root package.json orchestrates only; each package carries its own manifest and lockfile."
+        ]
+      }
+    }
+  },
+  "owners": {},
+  "evidence": { "_why": "Where a failed run's record, logs and read-only doctor commands live. Name every deployment that runs jobs, each with its own job store: a reported failure with no record here ran on another deployment. Nothing runs yet; P1 names the worker's job table and logs here." },
+  "platform": {
+    "os": "windows",
+    "quirks": [
+      "Both Git Bash and PowerShell run here. Hook matchers list Bash and PowerShell, and every shell permission rule needs a Bash(...) twin and a PowerShell(...) twin.",
+      "Before removing a git worktree, unlink its node_modules junction with cmd /c rmdir: git worktree remove --force and recursive deletes follow the junction and empty the main checkout.",
+      "Make source edits with the edit tool. A scripted edit (sed -i, perl -pi, PowerShell -replace) can match nothing on a CRLF file, or rewrite its endings, and still exit 0.",
+      "In the Bash tool a heredoc loses one backslash level, so write an interpreter script to a file and run the file rather than inlining it.",
+      "Run a third-party Python script with py -X utf8 (or PYTHONUTF8=1); Python otherwise reads text in the ANSI code page and turns some UTF-8 silently into mojibake.",
+      "C: has about 23 GB free with Docker on it; check space before large installs and never install PyTorch."
+    ]
+  }
+}

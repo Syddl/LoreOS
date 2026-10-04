@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  harness:
+    name: Harness guard checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      # The checkers are plain Node scripts with no dependencies: they read
+      # .claude/harness.json and replay fixture payloads through the guards.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # New check:* scripts go before check:all in package.json and at the
+      # end of this list, so two branches never collide on the same line.
+      - name: Claude guard fixtures
+        run: npm run check:hooks
+
+      - name: Codex adapter fixtures
+        run: npm run check:agent-hooks

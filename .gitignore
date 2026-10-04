@@ -12,3 +12,30 @@ dist/
 
 # Scratch output
 docs/sdd/*/scratch/
+
+# Added by harness init: runtime state, personal settings and lifecycle scratch stay out of git; the project layer is tracked.
+.claude/worktrees/
+.claude/checkpoints/
+.claude/mailbox/
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
+.claude/routines/
+.claude/agent-registry.json
+.claude/agent-memory-local/
+.claude/first-run
+.claude/assistant-daemon-state.json
+.claude/settings.local.json
+CLAUDE.local.md
+docs/sdd/**/scratch/
+
+# Local harness skill links; recreate with init --agent on each machine.
+/.agents/skills/authoring-a-check
+/.agents/skills/authoring-skills
+/.agents/skills/estimating-effort
+/.agents/skills/fixing-a-red-check
+/.agents/skills/grilling
+/.agents/skills/init
+/.agents/skills/sequencing-phases
+/.agents/skills/shipping-to-long-lived-branches
+/.agents/skills/spend-gated-runs
+/.agents/skills/triaging-a-failed-run

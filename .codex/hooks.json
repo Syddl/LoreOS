@@ -1,0 +1,50 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const f=require('node:fs'),p=require('node:path');let d=process.cwd();while(!f.existsSync(p.join(d,'.codex/hooks/guard.mjs'))){const n=p.dirname(d);if(n===d)throw Error('Harness guard not found');d=n}process.argv=[process.execPath,p.join(d,'.codex/hooks/guard.mjs'),'PreToolUse',d];import(require('node:url').pathToFileURL(process.argv[1]).href)\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const f=require('node:fs'),p=require('node:path');let d=process.cwd();while(!f.existsSync(p.join(d,'.codex/hooks/guard.mjs'))){const n=p.dirname(d);if(n===d)throw Error('Harness guard not found');d=n}process.argv=[process.execPath,p.join(d,'.codex/hooks/guard.mjs'),'PostToolUse',d];import(require('node:url').pathToFileURL(process.argv[1]).href)\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const f=require('node:fs'),p=require('node:path');let d=process.cwd();while(!f.existsSync(p.join(d,'.codex/hooks/guard.mjs'))){const n=p.dirname(d);if(n===d)throw Error('Harness guard not found');d=n}process.argv=[process.execPath,p.join(d,'.codex/hooks/guard.mjs'),'SessionStart',d];import(require('node:url').pathToFileURL(process.argv[1]).href)\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const f=require('node:fs'),p=require('node:path');let d=process.cwd();while(!f.existsSync(p.join(d,'.codex/hooks/guard.mjs'))){const n=p.dirname(d);if(n===d)throw Error('Harness guard not found');d=n}process.argv=[process.execPath,p.join(d,'.codex/hooks/guard.mjs'),'Stop',d];import(require('node:url').pathToFileURL(process.argv[1]).href)\"",
+            "timeout": 90
+          }
+        ]
+      }
+    ]
+  }
+}

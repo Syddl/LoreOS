@@ -1,0 +1,9 @@
+{
+  "name": "loreos",
+  "private": true,
+  "scripts": {
+    "check:hooks": "node scripts/check-hooks.mjs",
+    "check:agent-hooks": "node scripts/check-agent-hooks.mjs",
+    "check:all": "npm run check:hooks && npm run check:agent-hooks"
+  }
+}
