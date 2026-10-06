@@ -84,6 +84,24 @@ async def main() -> int:
         print("deleted the smoke workspace")
 
 
+USAGE = """usage: python -m loreos.smoke [--dry-run]
+  --dry-run  run only the free preflight (database, migration, key); no paid call"""
+
+
+def cli(argv: list[str]) -> int:
+    """The spend guard exempts --dry-run and --help, so both must stay free; any other argument is refused."""
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
+    if argv == ["--dry-run"]:
+        asyncio.run(preflight())
+        return 0
+    if argv:
+        print(USAGE, file=sys.stderr)
+        return 2
+    return asyncio.run(main())
+
+
 if __name__ == "__main__":
     sys.stdout.reconfigure(errors="replace")
-    sys.exit(asyncio.run(main()))
+    sys.exit(cli(sys.argv[1:]))

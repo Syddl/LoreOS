@@ -33,12 +33,30 @@ const cases = [
   ['Bash', `curl --json '{"question":"x"}' localhost:8000/api/ask`, 'ask'],
   ['PowerShell', `Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/ask -Body '{"question":"x"}' -ContentType application/json`, 'ask'],
   ['PowerShell', 'irm http://127.0.0.1:8000/api/documents -Method Post -Form $form', 'ask'],
+  // Spellings that slipped past the first patterns (whole-branch review): an exempt token as a
+  // substring (-h in --header or a filename), bundled flags, --module, assignments, aliases.
+  ['Bash', `curl -X POST --header "content-type: application/json" -d '{"question":"x"}' http://127.0.0.1:8000/api/ask`, 'ask'],
+  ['Bash', 'curl -F file=@employee-handbook.md http://127.0.0.1:8000/api/documents', 'ask'],
+  ['Bash', 'curl -sFfile=@a.md http://127.0.0.1:8000/api/documents', 'ask'],
+  ['Bash', 'uv run --module loreos.smoke', 'ask'],
+  ['Bash', 'python -mloreos.smoke', 'ask'],
+  ['Bash', 'uv run python backend/loreos/smoke.py', 'ask'],
+  ['PowerShell', '$r = Invoke-RestMethod -Method:Post -Uri http://127.0.0.1:8000/api/ask -Body $b', 'ask'],
+  ['PowerShell', 'curl -Method Post -Uri http://127.0.0.1:8000/api/ask -Body $b', 'ask'],
+  ['Bash', 'http POST 127.0.0.1:8000/api/ask question=x', 'ask'],
+  ['Bash', 'npm run-script paid:smoke', 'ask'],
+  ['PowerShell', 'npm.cmd run paid:smoke', 'ask'],
+  // A GET of the document list asks too: the HTTP pattern fails closed on any client naming a paid route.
+  ['Bash', 'curl -s http://127.0.0.1:8000/api/documents', 'ask'],
+  // Free: the checks, the server itself, the smoke preflight, and text that only names the routes.
   ['Bash', 'npm run check:backend', null],
   ['Bash', 'uv --directory backend run python -m pytest', null],
   ['Bash', 'npm run dev:api', null],
-  ['Bash', 'curl -s http://127.0.0.1:8000/api/documents', null],
-  ['PowerShell', 'Invoke-RestMethod http://127.0.0.1:8000/api/documents', null],
+  ['Bash', 'npm run paid:smoke -- --dry-run', null],
+  ['Bash', 'curl -s http://127.0.0.1:8000/docs', null],
   ['Bash', 'grep -rn loreos.smoke backend', null],
+  ['Bash', 'grep -rn "http://127.0.0.1:8000/api/ask" docs', null],
+  ['Bash', 'git add backend/loreos/smoke.py', null],
 ];
 
 let fail = 0;
