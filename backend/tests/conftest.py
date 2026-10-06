@@ -9,6 +9,7 @@ import os
 import re
 import zlib
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -87,3 +88,27 @@ def fake_embed(monkeypatch):
 
     monkeypatch.setattr(llm, "embed", embed)
     return calls
+
+
+@pytest.fixture
+def fake_draft(monkeypatch):
+    """Replace llm.draft_answer; set .reply to the Draft it returns; .calls records each question."""
+    from loreos import llm
+
+    fake = SimpleNamespace(reply=llm.Draft(found=True, text="From the documents [1]."), calls=[])
+
+    async def draft_answer(question, hits):
+        fake.calls.append(question)
+        return fake.reply
+
+    monkeypatch.setattr(llm, "draft_answer", draft_answer)
+    return fake
+
+
+@pytest.fixture
+def client(clean):
+    from fastapi.testclient import TestClient
+
+    from loreos.main import app
+
+    return TestClient(app)
