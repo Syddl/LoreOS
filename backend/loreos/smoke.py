@@ -90,7 +90,7 @@ USAGE = """usage: python -m loreos.smoke [--dry-run]
 
 
 def cli(argv: list[str]) -> int:
-    """The spend guard lets --dry-run and --help through unasked, so both must stay free; any other argument is refused.
+    """--dry-run and --help must stay free, since an operator approves them as the cheap preflight; any other argument is refused.
 
     `npm run paid:smoke --dry-run` (no `--`) passes no argument: npm keeps the flag, sets
     npm_config_dry_run and runs the script anyway, so that counts as --dry-run too.
