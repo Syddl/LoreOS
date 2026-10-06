@@ -16,8 +16,13 @@
     "meta_scripts": ["check:all"]
   },
   "spend": {
-    "_why": "Commands that can bill a provider, a GPU or a metered API. An empty list means nothing in this project spends. A plain string matches as a case-insensitive substring anywhere in the command (\"npm start\", \"probe:\"). An entry starting with \"re:\" is a case-insensitive regex tested against each subcommand (\"re:-X\\\\s+POST\\\\s+\\\\S*/api/jobs\"). An exempt token (\"--dry-run\") exempts only the subcommand it sits in, outside a trailing # comment; the other subcommands are still judged. The guard asks in the main session; it denies inside subagents and for background launches. A regex entry also sees the subcommand without its leading NAME=value assignments and wrapper words (env, nohup, timeout, sudo and the like), so an anchored regex is not hidden by them; a plain entry already matches anywhere. In LoreOS every command that calls OpenAI is a root package.json script named paid:<name> (paid:eval, paid:smoke), so one plain pattern catches them all.",
-    "patterns": ["npm run paid:"],
+    "_why": "Commands that can bill a provider, a GPU or a metered API. An empty list means nothing in this project spends. A plain string matches as a case-insensitive substring anywhere in the command (\"npm start\", \"probe:\"). An entry starting with \"re:\" is a case-insensitive regex tested against each subcommand (\"re:-X\\\\s+POST\\\\s+\\\\S*/api/jobs\"). An exempt token (\"--dry-run\") exempts only the subcommand it sits in, outside a trailing # comment; the other subcommands are still judged. The guard asks in the main session; it denies inside subagents and for background launches. A regex entry also sees the subcommand without its leading NAME=value assignments and wrapper words (env, nohup, timeout, sudo and the like), so an anchored regex is not hidden by them; a plain entry already matches anywhere. In LoreOS every command that calls OpenAI is a root package.json script named paid:<name> (paid:eval, paid:smoke). The regexes catch the same entry modules run directly (python -m loreos.smoke, .evaluation, .demo) and an HTTP post to the local API's paid routes (/api/ask, /api/documents), which embed and answer through OpenAI. scripts/check-spend.mjs replays these against the guard.",
+    "patterns": [
+      "npm run paid:",
+      "re:\\s-m\\s+loreos\\.(?:smoke|evaluation|demo)\\b",
+      "re:^curl(?:\\.exe)?\\b(?=.*\\s(?:-F|--form|-d|--data(?:-[a-z]+)?|--json|-X\\s*POST|--request\\s+POST)\\b)(?=.*/api/(?:ask|documents)\\b)",
+      "re:^(?:Invoke-RestMethod|Invoke-WebRequest|irm|iwr)\\b(?=.*\\s-(?:Method\\s+Post|Form|Body|InFile)\\b)(?=.*/api/(?:ask|documents)\\b)"
+    ],
     "exempt": ["--help", "-h", "--dry-run"]
   },
   "dangerous": {
@@ -91,7 +96,12 @@
     }
   },
   "owners": {},
-  "evidence": { "_why": "Where a failed run's record, logs and read-only doctor commands live. Name every deployment that runs jobs, each with its own job store: a reported failure with no record here ran on another deployment. Nothing runs yet; P1 names the worker's job table and logs here." },
+  "evidence": {
+    "_why": "Where a failed run's record, logs and read-only doctor commands live. Name every deployment that runs jobs, each with its own job store: a reported failure with no record here ran on another deployment. P1 runs one local api (npm run dev:api) against the database DATABASE_URL names; P4 adds the worker.",
+    "jobs": "loreos.documents in the DATABASE_URL database: status, error (stage: class: message), attempts, processed_at per document",
+    "logs": "the npm run dev:api terminal: logger loreos lines 'ingest failed document=<id> stage=<stage>' and 'ask found=<bool> reason=<reason>'",
+    "doctor": ["uv --directory backend run python -m alembic current"]
+  },
   "platform": {
     "os": "windows",
     "quirks": [

@@ -4,8 +4,8 @@ Gaps accepted for now. A row leaves this table when its fix merges (link the PR 
 
 | Gap | Impact | Owner | Trigger to fix |
 |---|---|---|---|
-| No product code yet; `check:all` runs only the guard fixtures | A green suite says nothing about LoreOS itself | backend, frontend | P1 adds the first backend and frontend checks to `check:all` and CI |
-| The spend guard catches only `npm run paid:*`; a direct `uv run` or `python` call to OpenAI is not asked | An unapproved evaluation or ingest run bills OpenAI | backend | The first script that calls OpenAI (P1) |
+| No frontend code or checks yet | A green suite says nothing about the UI or widget | frontend | P4 adds the first frontend checks to `check:all` and CI |
+| The spend guard asks for `paid:*`, `-m loreos.<smoke\|evaluation\|demo>` and curl or Invoke-RestMethod posts to `/api/ask` and `/api/documents`; other HTTP clients (httpie, wget, a Python one-liner) are not asked | An unapproved post to the running dev API bills one embedding batch per upload or one embedding plus one answer per question, a fraction of a cent each | backend | A new paid route or entry module, or a session that posts through another client |
 | Codex adapter installed, but its hooks are not yet trusted in the Codex CLI | Codex sessions run unguarded until trusted through `/hooks` | operator | The first Codex session in this repo |
 
 Rules for this table:
