@@ -1,11 +1,15 @@
-// check-spend: the live .claude/harness.json spend patterns ask before every command that bills
-// OpenAI (paid:* scripts, the paid entry modules run directly, an HTTP post to /api/ask or
-// /api/documents) and stay quiet for the checks and read-only calls. Replays PreToolUse payloads
-// through .claude/hooks/guard.mjs as the main session would send them.
+// check-spend: the live .claude/harness.json spend patterns ask before every command that can bill
+// OpenAI (paid:* scripts in any runner, an interpreter touching the paid loreos modules, any HTTP
+// client naming the dev API's /api or port 8000) and stay quiet for the checks and the server.
+// Only the exact `npm run paid:smoke -- --dry-run|--help` is free, so the check also pins the
+// paid:smoke script body that makes it free. Replays PreToolUse payloads through
+// .claude/hooks/guard.mjs as the main session would send them.
 //
-// Does NOT exercise: spellings no pattern names (httpie, wget, a Python one-liner that posts),
-// a subagent or background launch (the guard denies those; check:hooks covers it), or that
-// Claude Code invokes the hook at all.
+// Does NOT exercise: the spellings docs/KNOWN-GAPS.md lists (a one-liner posting with its own HTTP
+// library, a script file, names held in variables, PowerShell backtick escapes, eval), a subagent
+// or background launch (the guard denies those; check:hooks covers it), or that Claude Code
+// invokes the hook at all.
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -88,24 +92,40 @@ const cases = [
   ['Bash', `curl -d '{"question":"x"}' 'http://127.0.0.1:8000/api/[a-a]sk'`, 'ask'],
   ['Bash', `curl -d '{"question":"x"}' http://127.0.0.1:8000/%61pi/ask`, 'ask'],
   ['Bash', 'curl -s http://127.0.0.1:8000/docs', 'ask'],
-  // Only loreos.smoke is proven to keep --dry-run and --help free; other paid entries always ask.
+  // Only the exact npm free form of paid:smoke is exempt; every other paid entry and spelling asks.
   ['Bash', 'npm run paid:eval -- --dry-run', 'ask'],
   ['Bash', 'python -m loreos.evaluation --dry-run', 'ask'],
   ['Bash', 'python -m loreos.demo --help', 'ask'],
-  // Fails closed: text that names a paid command asks too (the plain `npm run paid:` pattern did the same).
+  // Fourth review: the free forms trusted text around them, so only the whole canonical subcommand
+  // is exempt now; one-liners importing a paid module; npm through its JS entry; a zero-padded port.
+  ['Bash', 'npm --script-shell=evil.cmd run paid:smoke -- --dry-run', 'ask'],
+  ['Bash', 'pnpm run paid:smoke -- --dry-run', 'ask'],
+  ['Bash', 'node --run paid:smoke -- --dry-run', 'ask'],
+  ['Bash', 'uv --directory backend run python -m loreos.smoke --dry-run', 'ask'],
+  ['PowerShell', 'py -m loreos.smoke --help', 'ask'],
+  ['Bash', `python -c "import os; os.system('x')" -m loreos.smoke --dry-run`, 'ask'],
+  ['Bash', `uv --directory backend run python -c "from loreos import smoke; smoke.cli([])"`, 'ask'],
+  ['Bash', `uv run python -c "from loreos import answering"`, 'ask'],
+  ['PowerShell', 'node "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js" run paid:smoke', 'ask'],
+  ['Bash', 'curl -d x http://127.0.0.1:08000/%61pi/ask', 'ask'],
+  // Fails closed: text that names a paid command asks too (the plain `npm run paid:` pattern did the
+  // same), and so does a tool run through uv on a paid module's file.
   ['Bash', 'grep -rn "npm run paid:smoke" docs', 'ask'],
   ['Bash', 'grep -rn "python -m loreos.smoke" docs', 'ask'],
+  ['Bash', 'uvx ruff check backend/loreos/smoke.py', 'ask'],
   // Free: the checks, the server itself, the exact free forms of paid:smoke, and text that names only
-  // a URL or a file.
+  // a URL, a file or prose.
   ['Bash', 'npm run check:backend', null],
   ['Bash', 'uv --directory backend run python -m pytest', null],
+  ['Bash', 'uv --directory backend run python -m pytest tests/test_ingest.py', null],
   ['Bash', 'npm run dev:api', null],
+  ['Bash', 'uv --directory backend run python -m uvicorn loreos.main:app --host 127.0.0.1 --port 8000', null],
+  ['Bash', 'npm run db:migrate', null],
   ['Bash', 'npm run paid:smoke -- --dry-run', null],
   ['Bash', 'npm run paid:smoke -- --help', null],
-  ['Bash', 'node --run paid:smoke -- --dry-run', null],
-  ['Bash', 'uv --directory backend run python -m loreos.smoke --dry-run', null],
-  ['PowerShell', 'py -m loreos.smoke --help', null],
+  ['PowerShell', 'npm.cmd run paid:smoke -- --dry-run', null],
   ['Bash', 'curl -s https://example.com/health', null],
+  ['Bash', 'git commit -m "fix: http 413 for /api/documents"', null],
   ['Bash', 'grep -rn loreos.smoke backend', null],
   ['Bash', 'grep -rn "http://127.0.0.1:8000/api/ask" docs', null],
   ['Bash', 'git commit -m "uv: loreos.smoke refuses args"', null],
@@ -113,11 +133,16 @@ const cases = [
 ];
 
 let fail = 0;
+// The exemption is safe only while paid:smoke runs loreos.smoke, which keeps --dry-run and --help free.
+const SMOKE = 'uv --directory backend run python -m loreos.smoke';
+const smokeScript = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts?.['paid:smoke'];
+if (smokeScript !== SMOKE) fail++;
+console.log(`  ${smokeScript === SMOKE ? 'ok  ' : 'FAIL'} package.json paid:smoke is exactly "${SMOKE}" (got ${JSON.stringify(smokeScript)})`);
 for (const [tool, command, want] of cases) {
   const got = decision(tool, command);
   const ok = got === want;
   if (!ok) fail++;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${tool}: ${command} -> ${got ?? 'no decision'}${ok ? '' : ` (want ${want ?? 'no decision'})`}`);
 }
-console.log(`\n${cases.length - fail}/${cases.length} spend checks passed`);
+console.log(`\n${cases.length + 1 - fail}/${cases.length + 1} spend checks passed`);
 process.exit(fail ? 1 : 0);
