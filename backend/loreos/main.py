@@ -5,18 +5,35 @@ import uuid
 from pathlib import PurePosixPath
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Response, UploadFile
+from urllib.parse import urlsplit
+
+from fastapi import FastAPI, HTTPException, Request, Response, UploadFile
 from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, StringConstraints
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from loreos import answering, ingest, parsing
 from loreos.db import workspace_session
 from loreos.workspaces import DEFAULT_WORKSPACE_ID
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+# P1 has no login, so only this machine may drive it: the Host check stops DNS rebinding, the Origin
+# check stops another site's page from posting here. P4's login and deployment hosts replace this.
+LOCAL_HOSTS = ["127.0.0.1", "localhost"]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 app = FastAPI(title="LoreOS")
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOCAL_HOSTS)
+
+
+@app.middleware("http")
+async def refuse_cross_origin_writes(request: Request, call_next):
+    """A browser sends Origin on a cross-site POST; curl and the TestClient send none."""
+    origin = request.headers.get("origin")
+    if request.method not in ("GET", "HEAD") and origin is not None and urlsplit(origin).hostname not in LOCAL_HOSTS:
+        return JSONResponse({"detail": f"cross-origin request from {origin} refused"}, status_code=403)
+    return await call_next(request)
 
 
 class AskRequest(BaseModel):
