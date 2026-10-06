@@ -14,21 +14,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  harness:
-    name: Harness guard checks
+  checks:
+    name: Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+
+    # The backend tests run against this, as they do against docker-compose.yml's testdb locally.
+    # No secrets: the tests set a fake OpenAI key and an unroutable base URL.
+    services:
+      testdb:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: loreos_test
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
 
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      # The checkers are plain Node scripts with no dependencies: they read
+      # The guard checkers are plain Node scripts with no dependencies: they read
       # .claude/harness.json and replay fixture payloads through the guards.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.2.0  # setup-uv publishes no floating major tag
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install the backend
+        run: uv --directory backend sync --locked
 
       # New check:* scripts go before check:all in package.json and at the
       # end of this list, so two branches never collide on the same line.
@@ -37,3 +62,12 @@ jobs:
 
       - name: Codex adapter fixtures
         run: npm run check:agent-hooks
+
+      - name: Backend tests
+        run: npm run check:backend
+
+      - name: Backend licenses
+        run: npm run check:licenses
+
+      - name: Spend guard on the live config
+        run: npm run check:spend
