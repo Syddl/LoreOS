@@ -48,14 +48,31 @@ const cases = [
   ['PowerShell', 'npm.cmd run paid:smoke', 'ask'],
   // A GET of the document list asks too: the HTTP pattern fails closed on any client naming a paid route.
   ['Bash', 'curl -s http://127.0.0.1:8000/api/documents', 'ask'],
-  // Free: the checks, the server itself, the smoke preflight, and text that only names the routes.
+  // From the re-review: a --dry-run or --help anywhere else in the text exempts nothing, npm flags
+  // around run, and a client called by its path.
+  ['Bash', 'npm run paid:smoke --dry-run', 'ask'],
+  ['Bash', 'python -m loreos.smoke --dry-run --now', 'ask'],
+  ['Bash', `curl -d '{"question":"what does --dry-run do?"}' http://127.0.0.1:8000/api/ask`, 'ask'],
+  ['Bash', 'npm run -s paid:smoke', 'ask'],
+  ['Bash', 'npm --silent run paid:smoke', 'ask'],
+  ['Bash', '/usr/bin/curl -F file=@a.md http://127.0.0.1:8000/api/documents', 'ask'],
+  ['Bash', '/c/Windows/System32/curl.exe -F file=@a.md http://127.0.0.1:8000/api/documents', 'ask'],
+  ['PowerShell', 'C:\\Windows\\System32\\curl.exe -F file=@a.md http://127.0.0.1:8000/api/documents', 'ask'],
+  // Free: the checks, the server itself, the exact free forms of a paid entry, and text that only
+  // names the routes or modules.
   ['Bash', 'npm run check:backend', null],
   ['Bash', 'uv --directory backend run python -m pytest', null],
   ['Bash', 'npm run dev:api', null],
   ['Bash', 'npm run paid:smoke -- --dry-run', null],
+  ['Bash', 'npm run paid:smoke -- --help', null],
+  ['Bash', 'uv --directory backend run python -m loreos.smoke --dry-run', null],
+  ['PowerShell', 'py -m loreos.smoke --help', null],
   ['Bash', 'curl -s http://127.0.0.1:8000/docs', null],
   ['Bash', 'grep -rn loreos.smoke backend', null],
+  ['Bash', 'grep -rn "python -m loreos.smoke" docs', null],
+  ['Bash', 'grep -rn "npm run paid:smoke" docs', null],
   ['Bash', 'grep -rn "http://127.0.0.1:8000/api/ask" docs', null],
+  ['Bash', 'git commit -m "uv: loreos.smoke refuses args"', null],
   ['Bash', 'git add backend/loreos/smoke.py', null],
 ];
 

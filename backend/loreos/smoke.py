@@ -8,6 +8,7 @@ and the unanswerable one is refused.
 """
 
 import asyncio
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -89,11 +90,15 @@ USAGE = """usage: python -m loreos.smoke [--dry-run]
 
 
 def cli(argv: list[str]) -> int:
-    """The spend guard exempts --dry-run and --help, so both must stay free; any other argument is refused."""
+    """The spend guard lets --dry-run and --help through unasked, so both must stay free; any other argument is refused.
+
+    `npm run paid:smoke --dry-run` (no `--`) passes no argument: npm keeps the flag, sets
+    npm_config_dry_run and runs the script anyway, so that counts as --dry-run too.
+    """
     if argv in (["-h"], ["--help"]):
         print(USAGE)
         return 0
-    if argv == ["--dry-run"]:
+    if argv == ["--dry-run"] or (not argv and os.environ.get("npm_config_dry_run", "").lower() == "true"):
         asyncio.run(preflight())
         return 0
     if argv:
