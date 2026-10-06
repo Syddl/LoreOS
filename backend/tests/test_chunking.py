@@ -1,8 +1,12 @@
 from loreos.chunking import CHUNK_OVERLAP, CHUNK_TOKENS, chunk, count_tokens
 from loreos.parsing import Section
 
-SENTENCE = "The on-call engineer acknowledges the page within five minutes and opens an incident. "
-LONG = "\n\n".join(SENTENCE * 4 for _ in range(12))  # 12 paragraphs of 4 sentences, well over 120 tokens
+# 12 distinct paragraphs of 4 distinct sentences, about 80 tokens each, so a shared tail means real overlap.
+PARAGRAPHS = [
+    " ".join(f"Runbook step {p}.{s} says the on-call engineer acknowledges the page, ticket {p}-{s}." for s in range(4))
+    for p in range(12)
+]
+LONG = "\n\n".join(PARAGRAPHS)
 RUN_ON = "word " * 400  # one sentence with no break, forcing token windows
 
 
@@ -27,8 +31,8 @@ def test_long_section_splits_within_budget_with_overlap():
 
 def test_split_prefers_paragraph_breaks():
     chunks = chunk([Section([], None, LONG)], max_tokens=120, overlap_tokens=0)
-    assert all(c.text.endswith("incident.") for c in chunks)
-    assert all(c.text.startswith("The on-call") for c in chunks)
+    assert all(set(c.text.split("\n\n")) <= set(PARAGRAPHS) for c in chunks), "whole paragraphs only"
+    assert "\n\n".join(c.text for c in chunks) == LONG
 
 
 def test_run_on_text_falls_back_to_token_windows():
@@ -44,5 +48,5 @@ def test_chunks_never_span_sections_and_ordinals_run_in_order():
     b = next(c for c in chunks if c.heading_path == ["B"])
     assert b.text == "B text.", "the first chunk of a section carries no tail from the section before"
     first_of_page = next(c for c in chunks if c.page == 2)
-    assert first_of_page.text.startswith("The on-call")
+    assert first_of_page.text.startswith("Runbook step 0.0 ")
     assert all(c.token_count <= 120 for c in chunks)
