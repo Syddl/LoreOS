@@ -1,0 +1,13 @@
+services:
+  # Test database for `npm run check:backend`: the Postgres major Supabase runs, with pgvector.
+  # Start it with: docker compose --profile test up -d testdb
+  testdb:
+    image: pgvector/pgvector:pg17
+    profiles: [test]
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: loreos_test
+    ports:
+      - "127.0.0.1:54329:5432"
+    tmpfs:
+      - /var/lib/postgresql/data

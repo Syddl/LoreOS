@@ -1,0 +1,25 @@
+[project]
+name = "loreos"
+version = "0.1.0"
+description = "Self-hostable document Q&A engine with measured retrieval"
+license = "MIT"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic",
+    "asyncpg",
+    "fastapi",
+    "openai",
+    "pypdf",
+    "python-multipart",
+    "sqlalchemy[asyncio]",
+    "tiktoken",
+    "uvicorn",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
