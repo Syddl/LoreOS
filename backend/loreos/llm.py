@@ -37,7 +37,7 @@ async def embed(texts: list[str]) -> list[list[float]]:
         for start in range(0, len(texts), EMBED_BATCH):
             response = await openai.embeddings.create(model=model, input=texts[start : start + EMBED_BATCH])
             vectors += [d.embedding for d in sorted(response.data, key=lambda d: d.index)]
-    if wrong := next((len(v) for v in vectors if len(v) != EMBEDDING_DIM), None):
+    if (wrong := next((len(v) for v in vectors if len(v) != EMBEDDING_DIM), None)) is not None:
         raise ValueError(
             f"{model} returned {wrong} dimensions and LoreOS stores {EMBEDDING_DIM}; "
             f"set EMBEDDING_MODEL to a {EMBEDDING_DIM}-dimension model such as text-embedding-3-small"

@@ -18,6 +18,7 @@ from loreos.db import workspace_session
 from loreos.workspaces import DEFAULT_WORKSPACE_ID
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 64 * 1024  # room for the multipart envelope around a file at the cap
 # P1 has no login, so only this machine may drive it: the Host check stops DNS rebinding, the Origin
 # check stops another site's page from posting here. P4's login and deployment hosts replace this.
 LOCAL_HOSTS = ["127.0.0.1", "localhost"]
@@ -29,10 +30,17 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOCAL_HOSTS)
 
 @app.middleware("http")
 async def refuse_cross_origin_writes(request: Request, call_next):
-    """A browser sends Origin on a cross-site POST; curl and the TestClient send none."""
+    """A browser sends Origin on a cross-origin POST; curl and the TestClient send none.
+
+    Same origin means the Origin's host:port is the Host the request was sent to, so a page on
+    another local port (another dev server) is refused too. A body declared over the upload cap is
+    refused here, before Starlette receives and spools it.
+    """
     origin = request.headers.get("origin")
-    if request.method not in ("GET", "HEAD") and origin is not None and urlsplit(origin).hostname not in LOCAL_HOSTS:
+    if request.method not in ("GET", "HEAD") and origin is not None and urlsplit(origin).netloc != request.headers.get("host"):
         return JSONResponse({"detail": f"cross-origin request from {origin} refused"}, status_code=403)
+    if int(request.headers.get("content-length") or 0) > MAX_REQUEST_BYTES:
+        return JSONResponse({"detail": "the request is over 20 MB; split the file or upload a smaller one"}, status_code=413)
     return await call_next(request)
 
 

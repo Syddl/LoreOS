@@ -92,13 +92,14 @@ def fake_embed(monkeypatch):
 
 @pytest.fixture
 def fake_draft(monkeypatch):
-    """Replace llm.draft_answer; set .reply to the Draft it returns; .calls records each question."""
+    """Replace llm.draft_answer; set .reply to the Draft it returns; .calls and .hits record each call."""
     from loreos import llm
 
-    fake = SimpleNamespace(reply=llm.Draft(found=True, text="From the documents [1]."), calls=[])
+    fake = SimpleNamespace(reply=llm.Draft(found=True, text="From the documents [1]."), calls=[], hits=[])
 
     async def draft_answer(question, hits):
         fake.calls.append(question)
+        fake.hits.append(hits)
         return fake.reply
 
     monkeypatch.setattr(llm, "draft_answer", draft_answer)

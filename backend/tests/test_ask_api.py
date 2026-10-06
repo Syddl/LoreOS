@@ -29,3 +29,12 @@ def test_answer_cites_the_passage(client, fake_embed, fake_draft):
         "We ship on Tuesdays.",
     )
     assert fake_draft.calls == ["When do we ship?"]
+
+
+def test_the_answer_model_sees_the_five_closest_chunks(client, fake_embed, fake_draft):
+    sections = "".join(f"# Team {i}\n\nTeam {i} ships on day {i}.\n\n" for i in range(7))
+    assert client.post("/api/documents", files={"file": ("teams.md", sections.encode())}).json()["chunk_count"] == 7
+    client.post("/api/ask", json={"question": "Which day does team 3 ship?"})
+    [hits] = fake_draft.hits
+    assert len(hits) == 5
+    assert hits[0].text == "Team 3 ships on day 3."

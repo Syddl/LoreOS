@@ -44,6 +44,19 @@ def test_processing_again_replaces_the_chunks(clean, fake_embed):
     assert sql("select attempts, status from loreos.documents where id = :d", d=doc.id) == [(2, "processed")]
 
 
+def test_a_failed_rerun_of_a_processed_document_leaves_no_stale_chunks(clean, fake_embed, monkeypatch):
+    """Search does not filter by status, so a failed document must not keep its old chunks."""
+    doc = upload()
+
+    async def embed_fails(texts):
+        raise ConnectionError("upstream timed out")
+
+    monkeypatch.setattr(llm, "embed", embed_fails)
+    run(lambda s: ingest.process(s, DEFAULT_WORKSPACE_ID, doc.id))
+    assert sql("select status, attempts from loreos.documents where id = :d", d=doc.id) == [("failed", 2)]
+    assert stored_chunks(doc.id) == []
+
+
 def test_a_store_failure_after_a_partial_insert_leaves_no_chunks(clean, monkeypatch):
     async def second_vector_has_the_wrong_size(texts):
         return [word_vector(t) if i == 0 else [1.0, 2.0, 3.0] for i, t in enumerate(texts)]
@@ -55,8 +68,17 @@ def test_a_store_failure_after_a_partial_insert_leaves_no_chunks(clean, monkeypa
     assert stored_chunks(doc.id) == []
 
 
-@pytest.mark.parametrize("leak", ["Incorrect API key provided: sk-proj-abcdef123456XYZ", "bad key sk-test-not-a-real-key"])
-def test_keys_never_reach_the_stored_error(clean, monkeypatch, leak):
+@pytest.mark.parametrize(
+    "configured_key, leak",
+    [
+        ("sk-test-not-a-real-key", "Incorrect API key provided: sk-proj-abcdef123456XYZ"),
+        ("sk-test-not-a-real-key", "bad key sk-test-not-a-real-key"),
+        ("gw_live_abcdef123456", "gateway refused key gw_live_abcdef123456"),  # a compatible server's key, no sk- prefix
+    ],
+)
+def test_keys_never_reach_the_stored_error(clean, monkeypatch, configured_key, leak):
+    monkeypatch.setenv("OPENAI_API_KEY", configured_key)
+
     async def embed_fails(texts):
         raise RuntimeError(leak)
 
