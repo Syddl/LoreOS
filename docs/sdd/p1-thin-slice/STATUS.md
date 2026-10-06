@@ -9,15 +9,15 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Open tasks
 
-- Step 9: the whole-branch review of `f52d672` returned fix then re-review ([reviews/branch.md](reviews/branch.md)). Fix wave done in `6386464` and `5ee06c2`, with each new check mutation-proven. The re-review of the fix wave is running.
-- Push the branch and open the PR; CI must go green on the pushed tip (row 18). Waiting on operator approval to push.
+- Step 9: three review rounds so far ([reviews/](reviews/)). The re-review of `91f3af1` (spend patterns at word boundaries, smoke-only exemption) is running. An automated security review of the same commit reported two allowlist escapes and one parser differential without details. Likely candidates: the module-form exemption trusts trailing text (`python -c ... -m loreos.smoke --dry-run`); the npm exemption allows npm flags such as `--script-shell`; a port with leading zeros (`:08000`). Fix: exempt only the exact `npm run paid:smoke -- --dry-run|--help` subcommand, drop the module-form exemption, and match `:0*8000`.
+- CI on the PR must go green on the pushed tip (row 18).
 - `npm run db:migrate` against Supabase: first run on the real session pooler. Waiting on operator approval.
 - `npm run paid:smoke` (row 16): needs `OPENAI_API_KEY` and the operator's yes at the ask prompt; its verification row is added by hand.
-- Steps 11 to 14: claim-green on the pushed tip, PR body, ledger rows, close.
+- Steps 13 to 14: ledger rows, close.
 
 ## Next step
 
-Read the fix-wave re-review; once it says merge, ask the operator to approve the push, `db:migrate` and `paid:smoke`.
+Fold the `91f3af1` re-review and the automated findings into one guard fix on the PR, claim green again, then ask the operator for `db:migrate` and `paid:smoke`.
 
 ## Blockers
 
@@ -33,6 +33,7 @@ Read the fix-wave re-review; once it says merge, ask the operator to approve the
 
 | date | branch | sha | suite | result | duration | not covered |
 |---|---|---|---|---|---|---|
+| 2026-10-06T12:31:21.540Z | p1-thin-slice | a9692b89 | `npm run check:all` | PASS | 48.6 s | paid:smoke against real OpenAI; db:migrate on Supabase's session pooler; dev:api in a browser; the pending automated security findings on 91f3af1 (2 allowlist escapes, 1 parser differential) |
 
 ## Port ledger
 
