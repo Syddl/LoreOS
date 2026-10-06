@@ -39,3 +39,10 @@ docs/sdd/**/scratch/
 /.agents/skills/shipping-to-long-lived-branches
 /.agents/skills/spend-gated-runs
 /.agents/skills/triaging-a-failed-run
+
+# Local harness skill links; recreate with init --agent on each machine.
+/.agents/skills/animate
+/.agents/skills/apple-design
+/.agents/skills/emil-design-eng
+/.agents/skills/review-animations
+/.agents/skills/writing-prds
