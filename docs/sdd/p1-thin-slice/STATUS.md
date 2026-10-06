@@ -9,15 +9,15 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Open tasks
 
-- Step 9: three review rounds so far ([reviews/](reviews/)). The re-review of `91f3af1` (spend patterns at word boundaries, smoke-only exemption) is running. An automated security review of the same commit reported two allowlist escapes and one parser differential without details. Likely candidates: the module-form exemption trusts trailing text (`python -c ... -m loreos.smoke --dry-run`); the npm exemption allows npm flags such as `--script-shell`; a port with leading zeros (`:08000`). Fix: exempt only the exact `npm run paid:smoke -- --dry-run|--help` subcommand, drop the module-form exemption, and match `:0*8000`.
-- CI on the PR must go green on the pushed tip (row 18).
+- Step 9: four review rounds ([reviews/](reviews/)). The last re-review said merge; its minors and the automated security findings are fixed in `fix(guard): exempt only the whole canonical paid:smoke free form`. PR #2 is open against main.
+- CI on the PR: green on `0aad5de` (setup-uv pinned). It must be green again on the final tip (row 18).
 - `npm run db:migrate` against Supabase: first run on the real session pooler. Waiting on operator approval.
 - `npm run paid:smoke` (row 16): needs `OPENAI_API_KEY` and the operator's yes at the ask prompt; its verification row is added by hand.
 - Steps 13 to 14: ledger rows, close.
 
 ## Next step
 
-Fold the `91f3af1` re-review and the automated findings into one guard fix on the PR, claim green again, then ask the operator for `db:migrate` and `paid:smoke`.
+With the operator's yes: `npm run db:migrate`, then `npm run paid:smoke -- --dry-run` (free preflight), then `npm run paid:smoke` once `OPENAI_API_KEY` is set.
 
 ## Blockers
 
