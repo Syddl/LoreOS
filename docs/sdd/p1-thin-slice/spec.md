@@ -33,7 +33,7 @@ Kill switch: none. P1 creates the system, so there is no earlier behaviour to re
 | Root scripts | package.json | `package.json` | `db:migrate`, `dev:api`, `check:backend`, `check:licenses`, `paid:smoke` |
 | Test database | compose service | `docker-compose.yml` | `testdb` under profile `test`: pgvector image on the same Postgres major version as Supabase, bound to 127.0.0.1. P4 adds the app services to this file. |
 
-Schema:
+Schema (every table, `alembic_version` included, in the Postgres schema `loreos`; see [decision 0002](../../decisions/0002-parsing-and-driver-libraries.md)):
 
 - `workspaces(id uuid pk, name text not null, created_at)`
 - `documents(id uuid pk, workspace_id fk, filename text, kind text check (kind in ('md','txt','pdf')), sha256 text, content bytea, status text check (status in ('pending','processing','processed','failed')), error text null, attempts int default 0, created_at, processed_at null)`, `unique (workspace_id, sha256)`, `unique (id, workspace_id)`
@@ -58,7 +58,7 @@ Schema:
 14. `npm run dev:api` binds 127.0.0.1 only. P1 has no login and every upload and question spends OpenAI money.
 15. No check calls OpenAI: the test environment sets a fake key and points `OPENAI_BASE_URL` at an unroutable local address, and tests replace `embed` and `draft_answer` with deterministic fakes.
 16. `npm run paid:smoke` runs a preflight before any paid call (DATABASE_URL connects, migrations at head, OPENAI_API_KEY set), then in a throwaway workspace uploads a fixture Markdown file, asks one answerable and one unanswerable question, prints the answers and citations, and deletes the workspace.
-17. The spend guard also asks before a direct run of a paid entry module (`python -m loreos.smoke`, later `loreos.evaluation` and `loreos.demo`), not only `npm run paid:*`; that row leaves `docs/KNOWN-GAPS.md`.
+17. The spend guard also asks before a direct run of a paid entry module (`python -m loreos.smoke`, later `loreos.evaluation` and `loreos.demo`) and before a curl or Invoke-RestMethod post to `/api/ask` or `/api/documents`, not only `npm run paid:*`. The KNOWN-GAPS row narrows to the HTTP clients the patterns do not name.
 18. `check:backend` runs pytest against the `testdb` container and fails with the command to start it when it is not running; it never skips the database tests. `check:all` and CI run it, CI with a pgvector service container.
 19. `check:licenses` fails when an installed backend package declares a strong or weak copyleft license (GPL, AGPL, LGPL, SSPL, EUPL and the like). MPL-2.0 is allowed for `certifi` only, which the OpenAI SDK needs through httpx; see Risks. `check:all` and CI run it.
 20. A decision record under `docs/decisions/` names the parsing and driver libraries for every v1 file type with their licenses: pypdf (BSD-3) for PDF, our own Markdown splitter, python-docx (MIT) and beautifulsoup4 (MIT) with httpx (BSD-3) for P4's DOCX and URL import, asyncpg (Apache-2.0) as the driver because psycopg is LGPL-3.0, tiktoken (MIT). This closes the brief's open question on parsing libraries.
@@ -78,7 +78,7 @@ Schema:
 | 10-12 | Citations and refusal | `tests/test_answering.py` with a fake `draft_answer` | Markers map to the right chunks; out-of-range markers dropped; no valid marker gives `REFUSAL` and `no_valid_citation`; not found gives `model_not_found` | Answer quality (P2) |
 | 13 | Empty cases | `tests/test_ask_api.py` | 422 for blank; `no_chunks` with no fake call | |
 | 15 | No OpenAI from checks | `tests/test_no_openai.py` | A real client built under the test environment fails to connect within a second | A test that bypasses `llm.py` |
-| 17 | Spend guard | `npm run check:hooks` with new fixtures | `python -m loreos.smoke` asks; `pytest` does not | Spend through other spellings the guard cannot see |
+| 17 | Spend guard | `npm run check:spend` (live config; `check-hooks.mjs` is a library template) | `python -m loreos.smoke` and a curl upload ask; `pytest` and a GET do not | Spend through other spellings the guard cannot see |
 | 18 | Wiring | `npm run check:all`; CI run on the PR | Both run `check:backend` and `check:licenses` green | |
 | 19 | Licenses | `npm run check:licenses` | Passes; a fixture metadata entry with `AGPL-3.0` fails it | Frontend packages (P4 adds them) |
 | 16 | Real slice end to end | `npm run paid:smoke` (asks first; a few cents) | Answerable question cited, unanswerable refused; verification row added by hand | Retrieval quality at scale (P2) |
@@ -93,7 +93,7 @@ None. P1 creates the system; there is no earlier behaviour to fall back to.
 - No DOCX or URL import: P4, with the worker and the URL fetch guard. P1 only records their libraries.
 - No keyword search or reranker: P3.
 - No README numbers: P5 generates them from result files.
-- Files under `.claude/` other than the spend patterns, fixtures and `evidence` entry named above.
+- Files under `.claude/` other than the spend patterns and `evidence` entry named above.
 
 ## Risks
 
