@@ -6,7 +6,8 @@
     "dev:api": "uv --directory backend run python -m uvicorn loreos.main:app --host 127.0.0.1 --port 8000 --reload",
     "check:hooks": "node scripts/check-hooks.mjs",
     "check:agent-hooks": "node scripts/check-agent-hooks.mjs",
-    "check:backend": "uv --directory backend run python -m pytest",
+    "check:backend": "node scripts/check-backend.mjs",
+    "check:licenses": "node scripts/check-licenses.mjs",
     "check:all": "npm run check:hooks && npm run check:agent-hooks"
   }
 }
