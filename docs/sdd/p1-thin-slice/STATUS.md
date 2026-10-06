@@ -11,13 +11,12 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 - Step 9: four review rounds ([reviews/](reviews/)). The last re-review said merge; its minors and the automated security findings are fixed in `fix(guard): exempt only the whole canonical paid:smoke free form`. PR #2 is open against main.
 - CI on the PR: green on `0aad5de` (setup-uv pinned). It must be green again on the final tip (row 18).
-- `npm run db:migrate` against Supabase: first run on the real session pooler. Waiting on operator approval.
 - `npm run paid:smoke` (row 16): needs `OPENAI_API_KEY` and the operator's yes at the ask prompt; its verification row is added by hand.
 - Steps 13 to 14: ledger rows, close.
 
 ## Next step
 
-With the operator's yes: `npm run db:migrate`, then `npm run paid:smoke -- --dry-run` (free preflight; the guard asks, since no paid form is exempt), then `npm run paid:smoke` once `OPENAI_API_KEY` is set.
+Once `OPENAI_API_KEY` is set: `npm run paid:smoke -- --dry-run` (free preflight; the guard asks, since no paid form is exempt), then `npm run paid:smoke`.
 
 ## Blockers
 
@@ -36,6 +35,7 @@ With the operator's yes: `npm run db:migrate`, then `npm run paid:smoke -- --dry
 | 2026-10-06T12:31:21.540Z | p1-thin-slice | a9692b89 | `npm run check:all` | PASS | 48.6 s | paid:smoke against real OpenAI; db:migrate on Supabase's session pooler; dev:api in a browser; the pending automated security findings on 91f3af1 (2 allowlist escapes, 1 parser differential) |
 | 2026-10-06T12:38:12.637Z | p1-thin-slice | 59729a75 | `npm run check:all` | PASS | 45.5 s | paid:smoke against real OpenAI; db:migrate on Supabase's session pooler; dev:api in a browser |
 | 2026-10-06T12:43:53.444Z | p1-thin-slice | cb02451f | `npm run check:all` | PASS | 47.8 s | paid:smoke against real OpenAI; db:migrate on Supabase's session pooler; dev:api in a browser |
+| 2026-10-06 (by hand, live) | p1-thin-slice | 660a61c1 | `alembic upgrade head` (what `npm run db:migrate` runs) on Supabase's session pooler, then a read-only check | PASS | | Version `0001`; `loreos.{workspaces,documents,chunks,alembic_version}` exist; default workspace present; `chunks.embedding` is `vector(1536)`; `anon` cannot select `loreos.documents`; `public.documents` untouched. Not covered: paid:smoke, dev:api |
 
 ## Port ledger
 
