@@ -35,6 +35,7 @@ With the operator's yes: `npm run db:migrate`, then `npm run paid:smoke -- --dry
 |---|---|---|---|---|---|---|
 | 2026-10-06T12:31:21.540Z | p1-thin-slice | a9692b89 | `npm run check:all` | PASS | 48.6 s | paid:smoke against real OpenAI; db:migrate on Supabase's session pooler; dev:api in a browser; the pending automated security findings on 91f3af1 (2 allowlist escapes, 1 parser differential) |
 | 2026-10-06T12:38:12.637Z | p1-thin-slice | 59729a75 | `npm run check:all` | PASS | 45.5 s | paid:smoke against real OpenAI; db:migrate on Supabase's session pooler; dev:api in a browser |
+| 2026-10-06T12:43:53.444Z | p1-thin-slice | cb02451f | `npm run check:all` | PASS | 47.8 s | paid:smoke against real OpenAI; db:migrate on Supabase's session pooler; dev:api in a browser |
 
 ## Port ledger
 
