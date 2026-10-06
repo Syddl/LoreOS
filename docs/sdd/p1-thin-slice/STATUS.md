@@ -17,7 +17,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-With the operator's yes: `npm run db:migrate`, then `npm run paid:smoke -- --dry-run` (free preflight), then `npm run paid:smoke` once `OPENAI_API_KEY` is set.
+With the operator's yes: `npm run db:migrate`, then `npm run paid:smoke -- --dry-run` (free preflight; the guard asks, since no paid form is exempt), then `npm run paid:smoke` once `OPENAI_API_KEY` is set.
 
 ## Blockers
 

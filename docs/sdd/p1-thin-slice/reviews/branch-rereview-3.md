@@ -29,9 +29,22 @@ Automated findings, read as the likely classes since no details came with them:
 
 The new fixtures ran red against `91f3af1` first (11), then green: `check:spend` 87/87, including the script-body pin.
 
+## After the fix
+
+Automated commit reviews of the fix commit (`fix(guard): exempt only the whole canonical paid:smoke free form`) reported two more problems:
+
+- **Control regression:** httpie with flags before its URL (`http -f POST ...:8000/api/documents`) stopped asking once httpie was narrowed to a URL as the next argument.
+- **Exemption depends on state outside the subcommand:** even the exact `npm run paid:smoke -- --dry-run` runs whatever package.json, .npmrc, an earlier `export npm_config_*=` or PYTHONPATH make it run, and a text matcher cannot see that state.
+
+Response, in `fix(guard): exempt no paid form, and catch httpie with flags`:
+
+- Nothing is exempt any more, `--dry-run` included. Every exemption in five rounds was bypassed through text or state around it, so the operator now approves the free preflight at the ask prompt, and smoke keeps an approved `--dry-run` free.
+- httpie asks when a URL-shaped `/api` or port 8000 appears anywhere after it.
+- The new fixtures ran red first (3 for httpie), then green: `check:spend` 90/90.
+
 ## Verdict
 
-merge (the reviewer's verdict on `91f3af1`; no blocker or major). The minors and the automated findings are fixed in the next commit.
+merge (the reviewer's verdict on `91f3af1`; no blocker or major). The minors and the automated findings are fixed in the two commits named above.
 
 ## Does NOT prove
 
