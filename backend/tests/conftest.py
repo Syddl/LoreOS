@@ -15,7 +15,9 @@ import pytest
 TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:54329/loreos_test"  # docker-compose.yml testdb
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["OPENAI_API_KEY"] = "sk-test-not-a-real-key"
-os.environ["OPENAI_BASE_URL"] = "http://127.0.0.1:9/v1"
+# 0.0.0.0 fails at once on Windows (address not valid) and on Linux (refused); a closed 127.0.0.1
+# port takes about two seconds on Windows, which retries the refused connection.
+os.environ["OPENAI_BASE_URL"] = "http://0.0.0.0:9/v1"
 
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
