@@ -16,6 +16,7 @@ from loreos.evaluation import dataset, labels, run
 from loreos.ingest import sha256
 
 TIMEOUT_SECONDS = 60
+MAX_BYTES = 50 * 1024 * 1024  # the largest corpus file is about 6 MB; a host serving more is serving something else
 FIX = "run npm run eval:fetch"
 
 
@@ -67,11 +68,13 @@ def _download(item: dict, target: Path) -> str | None:
     file, url, expected = item["file"], item["url"], item["sha256"]
     try:
         with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as response:
-            data = response.read()
+            data = response.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as e:
         return f"{file}: HTTP {e.code} from {url}; fix its url in eval/corpus.json"
     except OSError as e:  # URLError, and a timeout or reset during the read
         return f"{file}: {getattr(e, 'reason', e)} fetching {url}; check the network, then {FIX}"
+    if len(data) > MAX_BYTES:
+        return f"{file}: {url} serves over {MAX_BYTES} bytes; pin a url that serves the corpus file"
     if (got := sha256(data)) != expected:
         return f"{file}: downloaded sha256 {got}, expected {expected}, from {url}; pin a url that serves the expected bytes"
     part = target.with_name(target.name + ".part")
@@ -91,6 +94,11 @@ def _target(corpus_dir: Path, file: str) -> Path | None:
 
 def main() -> int:
     manifest = dataset.read_manifest(dataset.MANIFEST)
+    if problems := dataset.manifest_problems(manifest):  # before any request: a bad entry could name a file: url
+        print(f"{dataset.MANIFEST.name} is not valid; fix each, then run again:", file=sys.stderr)
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        return 1
     corpus_dir = dataset.CORPUS_DIR
     total = len(manifest["files"])
     present = total - len(corpus_problems(manifest, corpus_dir))

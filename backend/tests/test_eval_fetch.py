@@ -45,8 +45,14 @@ def server():
     httpd.server_close()
 
 
+SOURCES = [
+    {"name": prefix, "home": "https://example.com", "license": "CC0", "attribution": "Example", "files": prefix}
+    for prefix in ("handbook/", "nist/")
+]
+
+
 def manifest(*files: dict) -> dict:
-    return {"sources": [], "files": list(files)}
+    return {"sources": SOURCES, "files": list(files)}
 
 
 def served(server, file: str, body: bytes, digest: str | None = None) -> dict:
@@ -149,6 +155,21 @@ def test_main_names_a_file_that_cannot_be_parsed_and_writes_no_outline(server, t
     assert main() == 1
     assert "nist/blank.pdf: cannot be parsed (no extractable text" in capsys.readouterr().err
     assert not (dataset.CORPUS_DIR / "outline.txt").exists()
+
+
+def test_main_refuses_an_invalid_manifest_before_any_request(server, tmp_path, monkeypatch, capsys):
+    use_dataset(monkeypatch, tmp_path, [{"file": FILE, "url": "file:///etc/passwd", "sha256": sha256(BODY)}])
+    assert main() == 1
+    assert "corpus.json is not valid" in capsys.readouterr().err and server.requests == []
+
+
+def test_a_download_over_the_size_cap_is_refused_and_leaves_nothing(server, tmp_path, monkeypatch):
+    import loreos.evaluation.fetch as fetch_module
+
+    monkeypatch.setattr(fetch_module, "MAX_BYTES", len(BODY) - 1)
+    [problem] = fetch(manifest(served(server, FILE, BODY)), tmp_path)
+    assert FILE in problem and f"over {len(BODY) - 1} bytes" in problem
+    assert files_under(tmp_path) == []
 
 
 def test_corpus_problems_names_a_missing_and_a_changed_file(tmp_path):
