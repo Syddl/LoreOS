@@ -51,3 +51,24 @@ The baseline is green. The plan's new checks are red only because their files do
 - Nothing contacted OpenAI, GitLab, the PDF hosts or Supabase.
 - `redproof`'s refusals are inferred from its source, not from a run.
 - The first `check:backend` failure (an Application Control block on SQLAlchemy's DLL) passed on rerun; its cause is unknown.
+
+# Re-review: the revised plan (plan lens)
+
+Reviewer: `harness:reviewer`, fresh context, at `64d0d1a`. Verdict: **fix then proceed**. The fixes are plan-text edits, and reading their diff confirms them.
+
+Executed:
+- `npm run check:all`: hooks 395/395 and agent-hooks 7/7. check:backend had 73 passed and 1 failed, the expected `test_config.py::test_env_example_lists_exactly_the_keys_settings_reads` (JUDGE_MODEL is in `.env.example` before task 1.5 lands).
+- `check:spend` 90/90 and `check:licenses` 40/40, each run alone.
+
+Every prior finding is resolved in the plan text. The new findings and their fixes:
+
+| Severity | Finding | Fix |
+|---|---|---|
+| major | `redproof` inside a subagent, naming `backend/loreos/evaluation/...` or `llm.py` next to `uv ... python`, matches the spend pattern, and the guard denies it | The main session runs each `redproof` after the cherry-pick, approved at the ask. 1.6 (`parsing.py`) runs its own, with `--project` |
+| major | No check that the judge gets only the cited passages under their original numbers (built in `run.py`); 1.5's mutation could not be written | 2.1 asserts the judge's passages for an answer citing [2] and [4], with a mutation that passes the hits. 1.5's mutation numbers the passages by position. `fake_judge.calls` records the passages |
+| minor | The "every calibration row graded" destination rule could pass with 1 of 30 failures; more than 100 questions was untested | The rule reads `calibration_rows` and `calibration_judge_errors`; both cases are added |
+| minor | The usage test conflicted with clearing `USAGE` at the start | A stale seed must vanish, and counts added during the run must appear |
+| minor | `eval:calibration-draft`'s relative path resolved against `backend/` | Resolve against `INIT_CWD`, else the repo root, with a test |
+| minor | Cherry-picked implementer commits could carry an attribution trailer | Read each message first, and re-commit with `-n` when needed |
+| nit | testdb labels | Moved from 1.5 to 3.1's token case |
+| nit | The call-time rule named only `CORPUS_DIR` | It now covers every `dataset` name |

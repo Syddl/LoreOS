@@ -50,7 +50,7 @@ Implements [spec.md](spec.md). Sizing: all fourteen lifecycle steps, since `paid
   - Counts: `dataset.CALIBRATION_ROWS = 30`, `MIN_QUESTIONS = 60`, `MAX_QUESTIONS = 100`, `UNANSWERABLE_RANGE = (10, 20)`.
   - Corpus file check: `fetch.corpus_problems`, over raw bytes with `ingest.sha256`. Both fetch's skip and the preflight use it.
 
-  Every reader writes `dataset.CORPUS_DIR` at call time, never `from dataset import CORPUS_DIR`, so tests can monkeypatch it.
+  Every reader reads `dataset.<NAME>` at call time, for paths and counts alike, never `from dataset import <NAME>`. Tests monkeypatch them, and a copied name would send a test's output into the real `eval/results/`.
 - **A file's kind comes from `parsing.kind_of(file, b"")`**, so validation and ingest agree on Markdown versus PDF. A `.txt` source cannot be labeled (no headings, no pages), and the validator says so.
 - **The run is sequential.** About 100 questions at a few seconds each is well under the time a person waits, and sequential calls keep the search latency numbers clean.
 - **The judge prompt.** System message:
@@ -59,8 +59,9 @@ Implements [spec.md](spec.md). Sizing: all fourteen lifecycle steps, since `paid
 
   The user message is `Question: <q>`, then `Passages:` with each passage as `[n] <source>\n<text>`, then `Answer: <a>`. The schema is `Verdict(rationale: str, grade: Literal["faithful", "unfaithful"])`, with the rationale first so it is generated before the grade.
 - **Judge failure classes** (spec behaviour 7). `llm.judge` raises `llm.VerdictError` for a refusal, a `None` parse, `LengthFinishReasonError` or `ContentFilterFinishReasonError`. The run records a `VerdictError` on the row. Any `openai.APIError` stops the run.
-- **Fakes in tests**: `fake_embed` and `fake_draft` (P1), plus `fake_judge` in `conftest.py`. When its `.reply` is an exception, it raises it. The git checks go through `run.git_sha()` and `run.tree_clean()`, and tests patch them. `smoke.preflight` is patched to a no-op where a test is not about it.
-- **Each implementer works in its own git worktree** (the Agent tool's worktree isolation), runs its red, green and `redproof` checks there, and commits its owned paths with explicit paths. The main session cherry-picks each task's commits onto `p2-evaluation`, then removes the worktree. That keeps `redproof` usable: the target is tracked and the tree has no one else's changes.
+- **Fakes in tests**: `fake_embed` and `fake_draft` (P1), plus `fake_judge` in `conftest.py`. When its `.reply` is an exception, it raises it. `.calls` records `(question, answer, passages)`, so a test can check exactly which passages the judge got. The git checks go through `run.git_sha()` and `run.tree_clean()`, and tests patch them. `smoke.preflight` is patched to a no-op where a test is not about it.
+- **Each implementer works in its own git worktree** (the Agent tool's worktree isolation). It runs its red and green checks there and commits its owned paths with explicit paths, with no attribution trailer. The main session reads each commit message, then cherry-picks the task's commits onto `p2-evaluation`, re-committing with `-n` when a message carries a trailer. Then it removes the worktree.
+- **The main session runs each `redproof`**, in the foreground, right after cherry-picking that task, where the target is tracked and the tree is clean. Inside a subagent, a `redproof` command naming `backend/loreos/evaluation/...` or `llm.py` next to `uv ... python` matches the spend pattern, and the guard denies it. The operator approves each one at the ask. The implementer reports its red-first run and the exact mutation to apply. Task 1.6 (`parsing.py`) matches no pattern, so its implementer runs its own proof with `--project` set to its worktree.
 - **Each task's acceptance check runs only its own test files** and the existing tests it names. `npm run check:all` runs once per phase, from the main session, after the cherry-picks.
 - **Entry points** (`__main__`, `fetch`, `calibration`) call `sys.stdout.reconfigure(errors="replace")` as `smoke.py` does. A heading that cp1252 cannot print must not crash a run after spend.
 
@@ -91,7 +92,7 @@ Implements [spec.md](spec.md). Sizing: all fourteen lifecycle steps, since `paid
 | 1.2 | 2.1, 3.1 | - `is_relevant(hit, source) -> bool`; a hit is any object with `filename`, `heading_path` and `page`.<br>- `matched_sources(hit, sources) -> list[int]`.<br>- `OutlineEntry(file, heading_path, page, chunks)` and `outline(corpus: dict[str, bytes]) -> list[OutlineEntry]`.<br>- `label_problems(questions, entries) -> list[str]`, which names the closest heading.<br>- `broad_labels(questions, entries, max_chunks=3) -> list[str]`.<br>- `render_outline(entries) -> str`. |
 | 1.3 | 2.1 | `summarize(rows, calibration) -> {"metrics", "judge_confusion", "latency_ms", "counts"}` over the row shape below. `percentile(values, q) -> float \| None`, by nearest rank. |
 | 1.4 | 3.1 | - `corpus_problems(manifest, corpus_dir) -> list[str]`: each file missing or with the wrong sha256, by raw bytes.<br>- `fetch(manifest, corpus_dir) -> list[str]`: the problems found; downloads with `urllib.request`.<br>- `main() -> int`. |
-| 1.5 | 2.1, 3.1 | **Usage and verdicts**:<br>- `llm.USAGE`, a `collections.Counter` with keys `embedding_input`, `answer_input`, `answer_output`, `judge_input`, `judge_output` and `responses_without_usage`.<br>- `llm.Verdict`.<br>- `llm.VerdictError(RuntimeError)`.<br>**Functions**:<br>- `async llm.judge(question, answer, passages: list[dict{n, source, text}]) -> Verdict`.<br>- `llm.source_label(hit_or_citation) -> str`, renamed from `_source`.<br>**Settings**: `settings.judge_model()` and `settings.DEFAULT_JUDGE_MODEL = "gpt-6.1-sol"`.<br>**Test fixture**: conftest `fake_judge`, with `.reply` (a `Verdict`, or an exception to raise) and `.calls`. |
+| 1.5 | 2.1, 3.1 | **Usage and verdicts**:<br>- `llm.USAGE`, a `collections.Counter` with keys `embedding_input`, `answer_input`, `answer_output`, `judge_input`, `judge_output` and `responses_without_usage`.<br>- `llm.Verdict`.<br>- `llm.VerdictError(RuntimeError)`.<br>**Functions**:<br>- `async llm.judge(question, answer, passages: list[dict{n, source, text}]) -> Verdict`.<br>- `llm.source_label(hit_or_citation) -> str`, renamed from `_source`.<br>**Settings**: `settings.judge_model()` and `settings.DEFAULT_JUDGE_MODEL = "gpt-6.1-sol"`.<br>**Test fixture**: conftest `fake_judge`, with `.reply` (a `Verdict`, or an exception to raise) and `.calls` (a list of `(question, answer, passages)`). |
 | 2.1 | 3.1, 3.2 | **Corpus and workspace**:<br>- `run.workspace_name(manifest) -> str`.<br>- `async run.workspace_status(name, corpus) -> (workspace_id \| None, reused: bool)`.<br>- `run.load_corpus(manifest) -> dict[str, bytes]`.<br>**Git**: `run.git_sha() -> str`, `run.tree_clean() -> bool`.<br>**The paid part**: `async run.evaluate(mode, limit, preflight_sha: str) -> Path`. It runs after the preflight, which records `git_sha()`.<br>**Result**: the result file shape in the spec, with rows as below. |
 
 Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
@@ -125,7 +126,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
   - `calibration_problems` covers: exactly `CALIBRATION_ROWS` rows, unique ids, `human` in {faithful, unfaithful}, and each passage `{n: int >= 1, source: str, text: str}`.
   - The test validates the committed `eval/questions.jsonl` and `eval/judge_calibration.jsonl` when each exists, and skips naming the file when it does not. It also validates the committed `eval/corpus.json` when it exists.
 - Acceptance check: `uv --directory backend run python -m pytest tests/test_eval_set.py` green. It needs one failing fixture per rule above, plus a valid fixture of 10 unanswerable and 2 answerable rows that passes.
-- Red first: the test fails on import before `dataset.py` exists. After the commit, `redproof` removes the sources-on-unanswerable rule and its fixture test goes red.
+- Red first: the test fails on import before `dataset.py` exists. After the cherry-pick, the main session's `redproof` removes the sources-on-unanswerable rule and its fixture test goes red.
 - Skills to load: none
 - Predicted size: 3 files, about 170 lines, 30 minutes
 
@@ -146,7 +147,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
   - an unknown heading names its closest match;
   - a broad label is warned;
   - the outline renders paths and pages with chunk counts.
-- Red first: import failure. After the commit, `redproof` turns the prefix test into "first element equal" and the sibling case goes red.
+- Red first: import failure. After the cherry-pick, the main session's `redproof` turns the prefix test into "first element equal" and the sibling case goes red.
 - Skills to load: none
 - Predicted size: 2 files, about 130 lines, 30 minutes
 
@@ -164,7 +165,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
   - zero denominators give `None` for each metric;
   - p50 and p95 by nearest rank on a known list, and `percentile([])` is `None`;
   - a calibration verdict failure leaves the agreement denominator.
-- Red first: import failure. After the commit, `redproof` averages citation accuracy per question instead of pooling it, and the fixture goes red.
+- Red first: import failure. After the cherry-pick, the main session's `redproof` averages citation accuracy per question instead of pooling it, and the fixture goes red.
 - Skills to load: none
 - Predicted size: 2 files, about 140 lines, 30 minutes
 
@@ -185,7 +186,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
   - a second fetch makes no request;
   - a `../` path is refused;
   - `corpus_problems` names a missing file and a changed one.
-- Red first: import failure. After the commit, `redproof` writes the target before verifying, and "leaves nothing" goes red.
+- Red first: import failure. After the cherry-pick, the main session's `redproof` writes the target before verifying, and "leaves nothing" goes red.
 - Skills to load: none
 - Predicted size: 3 files, about 130 lines, 30 minutes
 
@@ -201,14 +202,14 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
     - A refusal, a `None` parse, `LengthFinishReasonError` or `ContentFilterFinishReasonError` raises `VerdictError`. Every `openai.APIError` propagates.
   - **Renames and settings**: `_source` becomes `source_label`. `settings.judge_model()` returns `_env("JUDGE_MODEL") or DEFAULT_JUDGE_MODEL`, and `test_config.py` pins `JUDGE_MODEL` and its default.
   - **Fixture**: the conftest gains `fake_judge`.
-- Acceptance check: `uv --directory backend run python -m pytest tests/test_llm_judge.py tests/test_config.py tests/test_answering.py tests/test_no_openai.py` green, against testdb. The fake client is `llm.client` patched to an async context manager whose `chat.completions.parse` and `embeddings.create` record their kwargs and return `SimpleNamespace` responses. The checks:
+- Acceptance check: `uv --directory backend run python -m pytest tests/test_llm_judge.py tests/test_config.py tests/test_answering.py tests/test_no_openai.py` green (no database needed). The fake client is `llm.client` patched to an async context manager whose `chat.completions.parse` and `embeddings.create` record their kwargs and return `SimpleNamespace` responses. The checks:
   - only the passages given are sent, with their numbers;
   - the model and `reasoning_effort` are right, with no `temperature` or `seed`;
   - `USAGE` gains the right counts for embed, draft and judge;
   - `usage=None` counts `responses_without_usage`;
   - a refusal raises `VerdictError`;
   - an `openai.APIError` raised by the fake propagates unchanged.
-- Red first: `ImportError` on `llm.judge`, and `test_config` fails on the missing `JUDGE_MODEL`. After the commit, `redproof` sends every hit's text instead of only the given passages, and the passage test goes red.
+- Red first: `ImportError` on `llm.judge`, and `test_config` fails on the missing `JUDGE_MODEL`. After the cherry-pick, the main session's `redproof` numbers the passages by position (`enumerate`) instead of by their `n`, and the "with their numbers" test goes red.
 - Skills to load: none
 - Predicted size: 5 files, about 160 lines, 40 minutes
 
@@ -223,7 +224,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
   - `## <i class="fas"></i>Compliance`;
   - `## Use {braces} here` (unchanged);
   - a nested path that mixes them.
-- Red first: the new cases fail on the current parser. After the commit, `redproof` removes the anchor regex and they go red.
+- Red first: the new cases fail on the current parser. After its commit, the implementer runs `redproof` in its worktree (`--project` set to the worktree; `parsing.py` matches no spend pattern). It removes the anchor regex, and the new cases go red.
 - Skills to load: none
 - Predicted size: 2 files, about 30 lines, 15 minutes
 
@@ -237,23 +238,27 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
     1. Clears `llm.USAGE`.
     2. Finds or creates the workspace by name, then ingests each corpus file in its own `workspace_session`. Any file not `processed` stops the run, naming the file and its stored error, before any answer call.
     3. Runs the questions: search with k=10, timed, then `answer_from_hits` with the first 5.
-    4. Judges each non-refused answer. A `VerdictError` is recorded on the row and in `notes`.
+    4. Judges each non-refused answer with only its cited passages, `{n, source, text}` built from the answer's citations, under their original numbers. A `VerdictError` is recorded on the row and in `notes`.
     5. Judges the calibration rows, unless `limit` is set.
     6. Calls `metrics.summarize` and builds the result. Its `usage` block maps `llm.USAGE` keys, and a non-zero `responses_without_usage` adds a note.
-  - **Destination**: decided per spec behaviour 5, every unmet condition a note. The file is written atomically, and the function returns the path.
+  - **Destination**: decided per spec behaviour 5, every unmet condition a note. The calibration condition reads `counts.calibration_rows == dataset.CALIBRATION_ROWS` and `counts.calibration_judge_errors == 0`, not just a non-null agreement. The file is written atomically, and the function returns the path.
   - **Partial results**: a `BaseException` after the workspace step writes the partial result to scratch with the error in `notes`, then re-raises.
   - **Committed results**: a test checks each committed file under `eval/results/` for `destination == "results"` and a non-null judge agreement.
 - Acceptance check: `uv --directory backend run python -m pytest tests/test_eval_run.py` green against testdb. It uses `fake_embed`, `fake_draft`, `fake_judge`, and a tiny fixture corpus of one Markdown file and one PDF from `tests/pdf.py`, with the `dataset` paths patched. It covers:
-  - **A full run**: written to the patched results dir, every metric present, `usage` filled from a seeded `USAGE`.
+  - **A full run**: written to the patched results dir, every metric present.
+  - **Usage**: a stale count seeded into `llm.USAGE` before the call is gone from the result's `usage`. Counts that a fake adds during the run appear there, and a `responses_without_usage` count added during the run produces its note.
+  - **Judge input**: for an answer citing [2] and [4] of 5 hits, the passages in `fake_judge.calls` are exactly `[{n: 2, ...}, {n: 4, ...}]`, with texts from those hits.
   - **Reuse**: a second run sends no chunk text to `fake_embed` and reports `reused: true`.
   - **The workspace key**: a changed `chunking.CHUNK_TOKENS` or `OPENAI_BASE_URL` gives a new workspace name.
   - **The same code path**: `answer_from_hits` receives the first 5 of 10 hits.
   - **Ingest failure**: a failing corpus file stops the run naming the file, and `fake_draft.calls == []`.
-  - **Destination**: each case in spec acceptance row 5 goes to scratch with its reason.
+  - **Destination**: each case in spec acceptance row 5 goes to scratch with its reason. So do a single calibration verdict failure out of 30, and more than 100 questions.
   - **Failure classes**: a `VerdictError` is recorded, and the run continues.
   - **Partial results**: an `openai.APIError` or a `KeyboardInterrupt` mid-loop leaves a partial scratch file and re-raises.
   - **Committed results**: the check passes on an empty `eval/results/` and fails on a fixture scratch file.
-- Red first: import failure. After the commit, `redproof` passes all 10 hits to `answer_from_hits`, and the same-code-path test goes red.
+- Red first: import failure. After the cherry-pick, the main session runs two `redproof` mutations:
+  - it passes all 10 hits to `answer_from_hits`, and the same-code-path test goes red;
+  - it gives the judge every hit instead of the cited passages, and the judge-input test goes red.
 - Skills to load: none
 - Predicted size: 2 files, about 380 lines, 90 minutes
 
@@ -284,7 +289,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
     - a missing model name is refused;
     - each stops before a fake that raises when called;
     - `smoke.preflight` is called, and the order holds;
-    - the printed corpus token count equals the token count of the texts `fake_embed` receives when the same corpus is really ingested.
+    - the printed corpus token count equals the token count of the texts `fake_embed` receives when the same corpus is really ingested. That case needs testdb, the only database use in window C.
   - **CLI**:
     - the npm flag cases from spec behaviour 12;
     - `--limit 0` exits 2;
@@ -292,7 +297,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
     - a preflight raising `SystemExit` never reaches it;
     - the preflight's sha is passed through.
   - **Fetch**: `main` writes `outline.txt`.
-- Red first: import failure. After the commit, `redproof` skips the tree check, and the dirty-tree case goes red.
+- Red first: import failure. After the cherry-pick, the main session's `redproof` skips the tree check, and the dirty-tree case goes red.
 - Skills to load: none
 - Predicted size: 7 files, about 260 lines, 70 minutes
 
@@ -303,14 +308,16 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
 - Change:
   - `draft(result) -> list[dict]` picks `CALIBRATION_ROWS` non-refused rows, spread evenly in id order. Each becomes `{id, question, answer, passages, human: null}`, with passages `{n, source, text}` from the citations. The judge's grade is never copied.
   - `main(argv)` writes `dataset.CALIBRATION`. It refuses, with exit 1, when the file exists or when fewer than `CALIBRATION_ROWS` rows are eligible.
+  - A relative result path resolves against `INIT_CWD`, which npm sets to the directory the operator ran it from, else against the repo root. `uv --directory backend` makes Python's own working directory `backend/`.
 - Acceptance check: `uv --directory backend run python -m pytest tests/test_eval_calibration.py` green:
   - 40 eligible rows give 30 spread across them;
   - refused rows are never picked;
   - no judge field is in the output;
   - an existing file is not overwritten;
   - 29 eligible rows exit 1;
+  - a relative path resolves against `INIT_CWD`;
   - the passages match `llm.judge`'s shape.
-- Red first: import failure. After the commit, `redproof` copies the judge grade into the row, and the no-judge-field test goes red.
+- Red first: import failure. After the cherry-pick, the main session's `redproof` copies the judge grade into the row, and the no-judge-field test goes red.
 - Skills to load: none
 - Predicted size: 2 files, about 90 lines, 20 minutes
 
