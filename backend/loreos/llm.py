@@ -110,6 +110,9 @@ async def draft_answer(question: str, hits: list["Hit"]) -> Draft:
         except (LengthFinishReasonError, ContentFilterFinishReasonError) as e:
             _count("answer", e.completion.usage if e.completion else None)  # billed, so counted, then raised as before
             raise
+        except ValidationError:  # a server that does not enforce the schema; parse() drops the usage
+            _count("answer", None)
+            raise
     _count("answer", completion.usage)
     message = completion.choices[0].message
     if message.parsed is None:

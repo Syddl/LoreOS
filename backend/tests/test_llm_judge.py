@@ -139,6 +139,18 @@ def test_a_reply_outside_the_verdict_schema_is_a_verdict_error(fake_openai):
     assert llm.USAGE == Counter(responses_without_usage=1)
 
 
+def test_a_draft_outside_the_schema_is_counted_and_raised_unchanged(fake_openai):
+    try:
+        llm.Draft.model_validate_json('{"found": "maybe"}')
+    except pydantic.ValidationError as e:
+        fake_openai.reply = e
+    hit = Hit(uuid.uuid4(), uuid.uuid4(), "handbook.md", ["Releases"], None, "We ship on Tuesdays.", 0.9)
+    with pytest.raises(pydantic.ValidationError) as caught:
+        asyncio.run(llm.draft_answer("When do we ship?", [hit]))
+    assert caught.value is fake_openai.reply
+    assert llm.USAGE == Counter(responses_without_usage=1)
+
+
 @pytest.mark.parametrize("error", [openai.LengthFinishReasonError, openai.ContentFilterFinishReasonError])
 def test_a_length_or_content_filter_stop_while_answering_still_counts_its_tokens(fake_openai, error):
     fake_openai.reply = error(completion=completion(None))
