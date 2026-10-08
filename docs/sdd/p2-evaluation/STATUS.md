@@ -14,8 +14,10 @@ The single carrier of state between sessions. Update it before a session ends; t
   - Tasks 1.1 to 1.7, 2.1, 3.1 and 3.2 are implemented, each by a fresh implementer in its own worktree, cherry-picked, and mutation-proven.
   - Task reviews: [reviews/window-a.md](reviews/window-a.md) and [reviews/window-b.md](reviews/window-b.md). Their fixes are applied with tests.
   - 3.3 (data and docs) is done by the main session.
-- **Step 7 for window C** (3.1, 3.2) is folded into the step 9 whole-branch review.
-- **Step 9**, the independent whole-branch review, is next. Then steps 11 and 12 (claim-green on the pushed tip, PR) wait on the operator's go-ahead to push.
+- **Step 7 for window C** (3.1, 3.2) was folded into the step 9 whole-branch review, which read those files in full.
+- **Step 9**: done, verdict "fix then merge" ([reviews/branch.md](reviews/branch.md)).
+- **Step 10**: the fixes are in `dc95b19`, `3378a9e`, `863f2aa` and `bbb8051`; their re-review is pending.
+- **Steps 11 and 12** (claim-green on the pushed tip, then the PR) wait on the operator's go-ahead to push.
 - **Step 8 and phase 4**, the operator's part:
   1. Write `eval/questions.jsonl` from `eval/corpus/outline.txt`.
   2. Set `OPENAI_API_KEY`.
@@ -26,7 +28,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Dispatch the whole-branch review (independent reviewer) on `p2-evaluation` against `origin/main`.
+Read the fix-wave re-review. Then, with the operator's go-ahead, push `p2-evaluation`, run `claim-green --feature p2-evaluation` on the pushed tip, and open the PR (the baseline lands later, from phase 4).
 
 ## Blockers
 
