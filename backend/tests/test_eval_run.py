@@ -240,8 +240,11 @@ def test_a_second_run_reuses_the_workspace_and_embeds_no_chunk(ev):
         lambda mp, m: mp.delenv("OPENAI_BASE_URL"),
         lambda mp, m: mp.setenv("EMBEDDING_MODEL", "text-embedding-3-large"),
         lambda mp, m: m["files"][0].update(sha256="0" * 64),
+        lambda mp, m: mp.setattr(run, "KEYED_SOURCES", run.KEYED_SOURCES[:-1]),
+        lambda mp, m: mp.setattr(run, "KEYED_FUNCTIONS", run.KEYED_FUNCTIONS[:-1]),
+        lambda mp, m: mp.setattr(run, "KEYED_LIBRARIES", run.KEYED_LIBRARIES[:-1]),
     ],
-    ids=["chunk-tokens", "chunk-overlap", "base-url", "no-base-url", "embedding-model", "corpus"],
+    ids=["chunk-tokens", "chunk-overlap", "base-url", "no-base-url", "embedding-model", "corpus", "source", "function", "library"],
 )
 def test_the_workspace_name_changes_with_each_input_that_shapes_the_chunks(monkeypatch, change):
     the_manifest = manifest(CORPUS)
@@ -344,15 +347,23 @@ def test_a_verdict_failure_is_recorded_on_its_row_and_the_run_goes_on(ev, monkey
     assert any(note.startswith(f"{failed['id']}: ") and str(error) in note for note in result["notes"]), result["notes"]
 
 
+def wrapped(error: Exception, cause: Exception) -> Exception:
+    """An error raised `from` cause, as llm.draft_answer wraps a BadRequestError in a RuntimeError."""
+    error.__cause__ = cause
+    return error
+
+
 @pytest.mark.parametrize(
     "where, error",
     [
         ("draft_answer", openai.APIConnectionError(request=REQUEST)),
+        ("draft_answer", wrapped(RuntimeError("gpt rejected the answer request"), openai.BadRequestError(
+            "unsupported parameter", response=httpx2.Response(400, request=REQUEST), body=None))),
         ("judge", openai.APIConnectionError(request=REQUEST)),
         ("judge", KeyboardInterrupt()),
         ("draft_answer", asyncio.CancelledError()),
     ],
-    ids=["api-error-answering", "api-error-judging", "ctrl-c", "cancelled"],
+    ids=["api-error-answering", "wrapped-api-error-answering", "api-error-judging", "ctrl-c", "cancelled"],
 )
 def test_a_stop_mid_loop_writes_the_completed_rows_to_scratch_and_re_raises(ev, monkeypatch, capsys, where, error):
     wrap(monkeypatch, where, raise_on(questions(3)[2]["question"], error))

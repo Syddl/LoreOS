@@ -5,6 +5,7 @@ Every `dataset.<NAME>` is read at call time, so a test can point the paths at a 
 """
 
 import hashlib
+import inspect
 import json
 import os
 import subprocess
@@ -13,6 +14,7 @@ import tempfile
 import time
 import uuid
 from datetime import UTC, datetime
+from importlib import metadata
 from pathlib import Path
 
 import openai
@@ -26,6 +28,9 @@ SCHEMA = 1
 SEARCH_K = 10
 MODES = ("vector",)  # P3 adds the others
 KEYED_SOURCES = (parsing, chunking, ingest)  # the code that shapes stored chunks and their embedding input
+# The embedding request and the stored vector text, captured at import so a test's fake never changes the key.
+KEYED_FUNCTIONS = (llm.embed, retrieval.vector_literal)
+KEYED_LIBRARIES = ("pypdf", "tiktoken")  # PDF text extraction and token counts shape the chunks too
 
 
 def workspace_name(manifest: dict) -> str:
@@ -33,6 +38,8 @@ def workspace_name(manifest: dict) -> str:
     inputs = [
         dataset.corpus_hash(manifest),
         *[Path(module.__file__).read_bytes().replace(b"\r\n", b"\n").decode() for module in KEYED_SOURCES],
+        *[inspect.getsource(function).replace("\r\n", "\n") for function in KEYED_FUNCTIONS],
+        *[f"{name}=={metadata.version(name)}" for name in KEYED_LIBRARIES],
         chunking.CHUNK_TOKENS,
         chunking.CHUNK_OVERLAP,
         settings.embedding_model(),
@@ -137,7 +144,7 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str) -> Path:
                 "judge_input_tokens": llm.USAGE["judge_input"],
                 "judge_output_tokens": llm.USAGE["judge_output"],
             },
-            "notes": notes + (usage_notes if missing else []),
+            "notes": (usage_notes if missing else []) + notes,  # a stop's note stays last
             "questions": rows,
         }
 
@@ -158,13 +165,14 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str) -> Path:
             notes.append(f"calibration: {dataset.CALIBRATION.name} is missing, so judge agreement is null; "
                          "write it with npm run eval:calibration-draft and grade it")
         else:
-            for row in calibration:
+            for i, row in enumerate(calibration, 1):
                 try:
                     grade = (await llm.judge(row["question"], row["answer"], row["passages"])).grade
                 except llm.VerdictError as e:
                     grade = None
                     notes.append(f"calibration {row['id']}: the judge gave no verdict ({e}); left out of judge agreement")
                 pairs.append({"id": row["id"], "human": row["human"], "judge": grade})
+                print(f"[calibration {i}/{len(calibration)}] {row['id']}: judge {grade or 'no verdict'}, human {row['human']}", flush=True)
         result = build()
         reasons = _scratch_reasons(result, limit, preflight_sha)
         result["notes"] += [f"scratch: {reason}" for reason in reasons]
@@ -206,6 +214,8 @@ async def _ask(workspace_id: uuid.UUID, question: dict) -> tuple[dict, list[str]
     except openai.APIError:
         raise  # the model or the key is broken, so every later answer would fail too
     except Exception as e:  # no parsed answer, or a length or content-filter stop: the user would get no answer either
+        if isinstance(e.__cause__, openai.APIError):
+            raise  # draft_answer wraps a rejected request (BadRequestError) for its message; it is still an API failure
         error = f"{type(e).__name__}: {e}"
         answer = answering.Answer(False, answering.REFUSAL, [], "answer_error")
         notes.append(f"{qid}: the answer failed ({error}); recorded as refused with reason answer_error")
