@@ -14,7 +14,9 @@ from loreos.evaluation import preflight, run
 
 # npm reads a flag given before `--` as its own config, sets npm_config_<name> and drops it from the script's
 # arguments, so `npm run paid:eval --limit=5` would start a full paid run. Each maps to its corrected form, and an
-# abbreviation argparse would accept (--lim) counts too. ponytail: a misspelling (--limt) is still swallowed silently.
+# abbreviation argparse would accept (--lim) counts too. ponytail: a misspelling (--limt) is still swallowed silently,
+# and npm expands --l and --m into its own --long and --message: `--l N` exits 2 on the stray N, `--m X` runs the
+# default mode. Refusing npm_config_message would refuse a user's .npmrc, so both stay.
 NPM_SWALLOWED = {"limit": "npm run paid:eval -- --limit N", "mode": "npm run paid:eval -- --mode vector"}
 
 

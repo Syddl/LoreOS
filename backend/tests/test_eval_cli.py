@@ -69,7 +69,7 @@ def test_npm_dry_run_without_the_separator_runs_only_the_preflight(spy, monkeypa
         ("limit", "npm run paid:eval -- --limit N"),
         ("mode", "npm run paid:eval -- --mode vector"),
         ("lim", "npm run paid:eval -- --limit N"),  # argparse would take --lim as --limit; npm takes it too
-        ("l", "npm run paid:eval -- --limit N"),
+        ("li", "npm run paid:eval -- --limit N"),
         ("mo", "npm run paid:eval -- --mode vector"),
     ],
 )
@@ -81,7 +81,8 @@ def test_a_flag_npm_swallowed_is_refused_with_the_separator_form(spy, monkeypatc
     assert form in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("name", ["loglevel", "user_agent", "cache", "message"])
+# npm's own settings, including the two it expands --l and --m into (npm run env --l --m=x shows long and message).
+@pytest.mark.parametrize("name", ["loglevel", "user_agent", "cache", "message", "long", "local_prefix"])
 def test_npm_s_own_settings_do_not_stop_the_run(spy, monkeypatch, name):
     monkeypatch.setenv(f"npm_config_{name}", "x")
     assert cli(["--dry-run"]) == 0

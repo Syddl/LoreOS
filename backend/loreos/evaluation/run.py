@@ -108,7 +108,8 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str, preflight_n
     workspace = {"name": workspace_name(manifest), "reused": None}
     rows: list[dict] = []
     pairs: list[dict] = []
-    notes: list[str] = [f"preflight: {note}" for note in preflight_notes]
+    opening = [f"preflight: {note}" for note in preflight_notes]
+    notes: list[str] = []
     llm.USAGE.clear()
 
     def build() -> dict:
@@ -147,7 +148,7 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str, preflight_n
                 "judge_input_tokens": llm.USAGE["judge_input"],
                 "judge_output_tokens": llm.USAGE["judge_output"],
             },
-            "notes": (usage_notes if missing else []) + notes,  # a stop's note stays last
+            "notes": opening + (usage_notes if missing else []) + notes,  # the preflight's first, a stop's last
             "questions": rows,
         }
 

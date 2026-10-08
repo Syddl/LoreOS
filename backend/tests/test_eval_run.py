@@ -385,10 +385,19 @@ def test_a_stop_mid_loop_writes_the_completed_rows_to_scratch_and_re_raises(ev, 
     assert partial["notes"][-1] == f"stopped: {type(error).__name__}: {error}"
 
 
-def test_the_preflight_notes_and_the_api_host_reach_the_result(ev):
+def test_the_preflight_notes_and_the_api_host_reach_the_result(ev, monkeypatch):
+    wrap(monkeypatch, "draft_answer", lambda *args: llm.USAGE.update(responses_without_usage=1))
     result = load(evaluate(limit=1, preflight_notes=["models: listing models returned 404; the model names are unverified"]))
     assert result["notes"][0] == "preflight: models: listing models returned 404; the model names are unverified"
-    assert result["settings"]["openai_base_url_host"] == "0.0.0.0"  # conftest's base URL; the host only, never the URL
+    assert result["notes"][1].startswith("usage: 1 OpenAI responses reported no token usage")
+    assert result["settings"]["openai_base_url_host"] == "0.0.0.0"  # conftest's base URL
+
+
+def test_the_api_host_never_carries_the_url_s_credentials_port_or_path(ev, monkeypatch):
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://user:secret@proxy.example:8443/v1")
+    path = evaluate(limit=1)
+    assert load(path)["settings"]["openai_base_url_host"] == "proxy.example"
+    assert b"secret" not in path.read_bytes() and b"8443" not in path.read_bytes()
 
 
 def test_only_the_vector_mode_runs():

@@ -116,8 +116,8 @@ def test_cleaned_headings_nest_into_a_clean_path():
 
 @pytest.mark.parametrize(
     "title",
-    [" " * 200_000 + "x", "{#" * 100_000, "<" * 200_000, "<a" * 100_000, "a" + " " * 200_000 + "b"],
-    ids=["spaces", "anchor-openers", "tag-openers", "tag-name-openers", "interior-spaces"],
+    [" " * 200_000 + "x", "{#" * 100_000, "<" * 200_000, "<a" * 100_000, "a" + " " * 200_000 + "b", "`" * 200_000, "`<a" * 100_000],
+    ids=["spaces", "anchor-openers", "tag-openers", "tag-name-openers", "interior-spaces", "backticks", "code-span-tag-openers"],
 )
 def test_hostile_heading_parses_in_linear_time(title):
     start = time.perf_counter()
