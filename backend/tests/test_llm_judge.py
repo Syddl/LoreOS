@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import httpx2  # the SDK's own HTTP module, to build the request its errors carry
 import openai
+import pydantic
 import pytest
 
 from loreos import llm, settings
@@ -125,6 +126,26 @@ def test_a_length_or_content_filter_stop_is_a_verdict_error_and_its_tokens_still
     with pytest.raises(llm.VerdictError, match=rf"{re.escape(settings.judge_model())}.*{error.__name__}"):
         judge()
     assert llm.USAGE["judge_input"] == 100
+
+
+def test_a_reply_outside_the_verdict_schema_is_a_verdict_error(fake_openai):
+    """A server that does not enforce the schema can send a grade parse() rejects with a ValidationError."""
+    try:
+        llm.Verdict.model_validate_json('{"rationale": "x", "grade": "partly"}')
+    except pydantic.ValidationError as e:
+        fake_openai.reply = e
+    with pytest.raises(llm.VerdictError, match=rf"{re.escape(settings.judge_model())}.*schema"):
+        judge()
+    assert llm.USAGE == Counter(responses_without_usage=1)
+
+
+@pytest.mark.parametrize("error", [openai.LengthFinishReasonError, openai.ContentFilterFinishReasonError])
+def test_a_length_or_content_filter_stop_while_answering_still_counts_its_tokens(fake_openai, error):
+    fake_openai.reply = error(completion=completion(None))
+    hit = Hit(uuid.uuid4(), uuid.uuid4(), "handbook.md", ["Releases"], None, "We ship on Tuesdays.", 0.9)
+    with pytest.raises(error):
+        asyncio.run(llm.draft_answer("When do we ship?", [hit]))
+    assert llm.USAGE == Counter(answer_input=100, answer_output=20)
 
 
 @pytest.mark.parametrize(

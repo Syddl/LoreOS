@@ -7,7 +7,7 @@ import collections
 from typing import TYPE_CHECKING, Literal
 
 from openai import AsyncOpenAI, BadRequestError, ContentFilterFinishReasonError, LengthFinishReasonError
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from loreos import settings
 from loreos.embeddings import EMBEDDING_DIM
@@ -55,7 +55,7 @@ class Verdict(BaseModel):
 
 
 class VerdictError(RuntimeError):
-    """The judge gave no verdict: a refusal, no parsed output, or a length or content-filter stop."""
+    """The judge gave no verdict: a refusal, no parsed output, output outside the schema, or a length or content-filter stop."""
 
 
 def client() -> AsyncOpenAI:
@@ -107,6 +107,9 @@ async def draft_answer(question: str, hits: list["Hit"]) -> Draft:
                 f"{model} rejected the answer request ({e.message}); a server behind OPENAI_BASE_URL "
                 "may not support structured output (response_format json_schema)"
             ) from e
+        except (LengthFinishReasonError, ContentFilterFinishReasonError) as e:
+            _count("answer", e.completion.usage if e.completion else None)  # billed, so counted, then raised as before
+            raise
     _count("answer", completion.usage)
     message = completion.choices[0].message
     if message.parsed is None:
@@ -133,6 +136,9 @@ async def judge(question: str, answer: str, passages: list[dict]) -> Verdict:
             # API errors are not caught here: they stop the run, while a verdict failure is one row's.
             _count("judge", e.completion.usage if e.completion else None)
             raise VerdictError(f"{model} stopped before a verdict ({type(e).__name__})") from e
+        except ValidationError as e:  # a server that does not enforce the schema; parse() drops the usage
+            _count("judge", None)
+            raise VerdictError(f"{model} returned a verdict outside the schema ({e.error_count()} errors)") from e
     _count("judge", completion.usage)
     message = completion.choices[0].message
     if message.parsed is None:
