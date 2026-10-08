@@ -44,7 +44,7 @@ Onyx, RAGFlow, AnythingLLM and Dify already serve organizations, and several rep
 
 1. Headline: measured retrieval and the comparison table. Rejected: a breadth-first feature list, which existing clones already have.
 2. Timing: thesis first; after P2, P3 and P4 can run in parallel sessions. Rejected: full-time now, with 27 thesis issues open.
-3. Demo documents: a subset of the GitLab handbook (MIT) plus a few public PDFs. Rejected: invented documents, which give no real exact-term questions.
+3. Demo documents: a subset of the GitLab handbook plus a few public PDFs. The handbook's text is CC BY-SA 4.0, not MIT (MIT covers GitLab's software); the PDFs are US government works. [Decision 0003](../../decisions/0003-evaluation-corpus-and-judge.md) holds the details. Rejected: invented documents, which give no real exact-term questions.
 4. v1 includes: PDF, Markdown, TXT, DOCX and single-URL import; our own chunker; vector plus keyword search merged with RRF; a local reranker; cited answers and "couldn't find this"; workspaces with RLS and an isolation test; a worker with retries; API keys; the UI; the widget in P6 with publishable keys, allowed domains and a rate limit in Postgres.
 5. Crawler, extra roles and caching come later; separate services and Redis are out. Rejected: everything in v1, about a year of solo work.
 6. Stack: backend in Python with FastAPI, uv, SQLAlchemy and Alembic; frontend and widget in strict TypeScript with React, Vite, Tailwind and shadcn, served by FastAPI. Rejected: Next.js (heavier, one more server process) and a TypeScript backend (weaker AI and evaluation libraries).

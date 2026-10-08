@@ -1,0 +1,267 @@
+{
+  "sources": [
+    {
+      "name": "GitLab Handbook",
+      "home": "https://gitlab.com/gitlab-com/content-sites/handbook/-/tree/8d0947598af36ea1a8d534028f103f8277976716",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "GitLab Handbook by GitLab Inc., CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/), pages under content/handbook/ at commit 8d0947598af36ea1a8d534028f103f8277976716",
+      "files": "handbook/"
+    },
+    {
+      "name": "NIST publications",
+      "home": "https://www.nist.gov/open/copyright-fair-use-and-licensing-statements-srd-data-software-and-technical-series-publications",
+      "license": "US government work, not subject to copyright in the United States",
+      "attribution": "NIST CSWP 29 (Cybersecurity Framework 2.0), NIST AI 100-1 (AI RMF 1.0) and NIST SP 800-88r2. Republished courtesy of the National Institute of Standards and Technology.",
+      "files": "pdf/nist-"
+    },
+    {
+      "name": "OSHA 3885",
+      "home": "https://www.dol.gov/general/aboutdol/copyright",
+      "license": "US government work, public domain",
+      "attribution": "OSHA 3885, Recommended Practices for Safety and Health Programs, U.S. Department of Labor, Occupational Safety and Health Administration.",
+      "files": "pdf/osha-"
+    }
+  ],
+  "files": [
+    {
+      "file": "handbook/communication/ask-me-anything.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/communication/ask-me-anything.md",
+      "sha256": "a89a447d9b2675a050b0379b9005134d6144768b56670ace47b37e00c332967c"
+    },
+    {
+      "file": "handbook/communication/confidentiality-levels.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/communication/confidentiality-levels.md",
+      "sha256": "063963c90a4aafbd4649c117ec836050900b52da92ec2393a78d065d3ae7d486"
+    },
+    {
+      "file": "handbook/communication/deep-dives.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/communication/deep-dives.md",
+      "sha256": "87e7cf5548c57dd0e89686a6c6e3974e737c21fd00a8e56b2f2413aca1971e41"
+    },
+    {
+      "file": "handbook/communication/power-of-the-pause.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/communication/power-of-the-pause.md",
+      "sha256": "90f8d4ab6e238af0b77c6f8609ce11d98fe8abbe72afc61b8e8871e2e0354681"
+    },
+    {
+      "file": "handbook/communication/zoom/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/communication/zoom/_index.md",
+      "sha256": "122d2b719d26a9e1fe3df64c4c1c497780e027b2c37b399315b536d2865d2516"
+    },
+    {
+      "file": "handbook/communication/zoom/webinars.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/communication/zoom/webinars.md",
+      "sha256": "477e26ecbd7655533ecc82aadec1ff194aff527fdcfeea7831e1bd85bb4ca01a"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/_index.md",
+      "sha256": "750a5b703242868e3dc9653fc17ce23f6c4eff9fc5aa8e74c11db68bb49d948e"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-offboarding-returns/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-offboarding-returns/_index.md",
+      "sha256": "b2d74c73a5a9ae7a742513d296f3ccbc1c3da1a5acc771be7ebac359b7f93ccc"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-ordering/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-ordering/_index.md",
+      "sha256": "3b4e33e58c01c87a563234bb134821b950f7e8b57a3f56cbbebb2985ac4d97fe"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-repairs/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-repairs/_index.md",
+      "sha256": "da62c69bc700aaa9b5a4b3154aea9d52c20655fcbf2fef8db72d24c82443fe4b"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/browsers/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/browsers/_index.md",
+      "sha256": "d16717c2cf054fa26abf6d06c0328eed6fe593fc395f487557eaf3e81f8c5df3"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/encryption/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/encryption/_index.md",
+      "sha256": "6a3f6ace3f4a8352c39b707bedcb024941522dae7ae8eabc891897b2c40b9faa"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/firewall/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/firewall/_index.md",
+      "sha256": "0d634ce4ee157141bcf0131ee126dcfaf220d17ac83d805517af10f1b3cbe095"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/icloud/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/icloud/_index.md",
+      "sha256": "e2ae6699c118fde30d0a46327d71d447251e4116e2ebc266548800c950a92564"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/management/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/management/_index.md",
+      "sha256": "52522a9030b1301dbe5895b22f35ca517b1db5d5366f24cc6e9014304aaa754e"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/networks/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/networks/_index.md",
+      "sha256": "692289bcde977d3d4d4ac8be0fa2d5b6df55b3171f7fb5813988bc11b7297c50"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/personal/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/personal/_index.md",
+      "sha256": "111ce42f20abe1385a40faa82bb05607a95ca588ec6f7c6ba6d39e2560ce888d"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/unattended/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/unattended/_index.md",
+      "sha256": "b55b02b27895b83d30f77e2151a8327459bd8fe37c91054314dd75c14f97dedf"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/updates/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-security/updates/_index.md",
+      "sha256": "9e75fd91aaedd5b96527f9ffeefdb147ec1465c74ac562a30934ecb528bb3094"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-vendors/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-vendors/_index.md",
+      "sha256": "cc2b90ebeeffc5dfc4bf70e2f424fa394228b28f3329322fa03248fe1a67d555"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/laptop-management/laptop-wipe/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/laptop-management/laptop-wipe/_index.md",
+      "sha256": "1dfa75f7a260617290b3889d0f792390d49881542b2975acdb8d750983f8cb7c"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/onboarding101/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/onboarding101/_index.md",
+      "sha256": "1ce9c941538f57708a3399c11d4ede65a4eea59a25dbfa2892aab61ba87b2d2c"
+    },
+    {
+      "file": "handbook/eta/corporate-it/end-user-services/onboarding101/linux-onboarding101.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/eta/corporate-it/end-user-services/onboarding101/linux-onboarding101.md",
+      "sha256": "a7156a81946c81c05d40a327e33f90820eafbcc39e45c010d6d7f2bb84a0a7fa"
+    },
+    {
+      "file": "handbook/finance/expenses.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/finance/expenses.md",
+      "sha256": "f8e08af030221339d13686bb336b6560fca54803ac19049c94b84dcebb468e82"
+    },
+    {
+      "file": "handbook/finance/travel/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/finance/travel/_index.md",
+      "sha256": "9eb826c1d73b1a8a3d8413e3b0d788a50624bdb3817d80b45cc12e5699b4488f"
+    },
+    {
+      "file": "handbook/finance/travel/sponsored.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/finance/travel/sponsored.md",
+      "sha256": "30bb69ce49613603df4b4f0479eb36dcf5d1a7f50a8b381e50c8f9e255383ce4"
+    },
+    {
+      "file": "handbook/people-group/acceptable-use-policy.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/people-group/acceptable-use-policy.md",
+      "sha256": "314cd6040a952ede6b5d17399f44c5b7f38227c3e058919af21ea2b334e5ae01"
+    },
+    {
+      "file": "handbook/people-group/general-onboarding/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/people-group/general-onboarding/_index.md",
+      "sha256": "6af4a947df52cdd6f6208e1bc3bcb57c8901bf9d4711ddc8f6047e942296c873"
+    },
+    {
+      "file": "handbook/people-group/general-onboarding/mr-buddies.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/people-group/general-onboarding/mr-buddies.md",
+      "sha256": "fc71c53faa384f153779ccaf31bbedbe9b860880522e8606516c4233f8d85cab"
+    },
+    {
+      "file": "handbook/people-group/general-onboarding/onboarding-buddies.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/people-group/general-onboarding/onboarding-buddies.md",
+      "sha256": "436321d3da0cfe9b46644bce434e67faf3836eb1adcc48de8faaefd44a841adf"
+    },
+    {
+      "file": "handbook/people-group/time-off-and-absence/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/people-group/time-off-and-absence/_index.md",
+      "sha256": "d580c6887c382a9210c4899b794684cd88654c48ef5843faf859cab450f3538b"
+    },
+    {
+      "file": "handbook/people-group/time-off-and-absence/leave-types.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/people-group/time-off-and-absence/leave-types.md",
+      "sha256": "b956207cc4522d0608e44184255b3360e63b47abe9e70db32c43652efedea87c"
+    },
+    {
+      "file": "handbook/people-group/time-off-and-absence/time-away-philosophy.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/people-group/time-off-and-absence/time-away-philosophy.md",
+      "sha256": "d779afe2e18a126c8882ecea7295b0d755533c51f2ede0db727fa764bbc56c46"
+    },
+    {
+      "file": "handbook/people-group/time-off-and-absence/time-off-types.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/people-group/time-off-and-absence/time-off-types.md",
+      "sha256": "7597b2c20fcdfac920bd75045f222afbd462596b0b5a768b6dee90b4ae8f626f"
+    },
+    {
+      "file": "handbook/security/password-guidelines.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/security/password-guidelines.md",
+      "sha256": "29b7393789d984ae51a8046d2f97ae035cfaa00840a3bf128bed808b35eab6dc"
+    },
+    {
+      "file": "handbook/security/policies_and_standards/data-classification-standard.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/security/policies_and_standards/data-classification-standard.md",
+      "sha256": "4f2766e71ac03a573db8686bdc1c1bcd742110424884ae4e927fcd2be5c2e165"
+    },
+    {
+      "file": "handbook/security/policies_and_standards/password-standard.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/security/policies_and_standards/password-standard.md",
+      "sha256": "95598cc0f298c996be76b5d999351a4ba7de6e62dbbbe0073367b280c7ddfcb8"
+    },
+    {
+      "file": "handbook/security/policies_and_standards/physical-security-standard-for-company-assets.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/security/policies_and_standards/physical-security-standard-for-company-assets.md",
+      "sha256": "8a0df29e220c508181cd6e5da9b26995c5814cfe648d4aef7e93f1d1b33b4a70"
+    },
+    {
+      "file": "handbook/security/policies_and_standards/records-retention-deletion.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/security/policies_and_standards/records-retention-deletion.md",
+      "sha256": "c09e9f8096877d4f694ac4d9fba74bdaf4fe4873df7eb38c92982a40e9bf31c7"
+    },
+    {
+      "file": "handbook/security/policies_and_standards/security-logging-standard.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/security/policies_and_standards/security-logging-standard.md",
+      "sha256": "1ea1c8726de928e55512d9bd6f152e1a54a8a7ca942210d22c23d338b7bfebc8"
+    },
+    {
+      "file": "handbook/security/policies_and_standards/software-development-lifecycle-standard.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/security/policies_and_standards/software-development-lifecycle-standard.md",
+      "sha256": "567660a3e1805640a42e54cd168bdab52c7e4b99e5fa4e972e73a49c6f1ce7a1"
+    },
+    {
+      "file": "handbook/security/policies_and_standards/token-management-standard.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/security/policies_and_standards/token-management-standard.md",
+      "sha256": "6fa18a72023c63f0eacf0dfa7db94766aca58b38c78b31d726e8e16fcdfce7ec"
+    },
+    {
+      "file": "handbook/total-rewards/benefits/parental-leave-toolkit.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/total-rewards/benefits/parental-leave-toolkit.md",
+      "sha256": "8c6c4fca9d2c67b1f122edd48c027892001f06982b1add587238e1cf09732bb7"
+    },
+    {
+      "file": "handbook/values/_index.md",
+      "url": "https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/8d0947598af36ea1a8d534028f103f8277976716/content/handbook/values/_index.md",
+      "sha256": "1e34902990c11c32ef5bdfc079411c318d93fb1c5d1b0c96e185b14059c678ca"
+    },
+    {
+      "file": "pdf/nist-csf-2.0.pdf",
+      "url": "https://web.archive.org/web/20250611182507id_/https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.29.pdf",
+      "sha256": "3c31f46fee98cac0c4323453e5109291a213b4de7fef8c058af9bf67f717433c"
+    },
+    {
+      "file": "pdf/nist-ai-rmf-1.0.pdf",
+      "url": "https://web.archive.org/web/20250605232319id_/https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf",
+      "sha256": "7576edb531d9848825814ee88e28b1795d3a84b435b4b797d3670eafdc4a89f1"
+    },
+    {
+      "file": "pdf/nist-sp-800-88r2.pdf",
+      "url": "https://web.archive.org/web/20250930154021id_/https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-88r2.pdf",
+      "sha256": "39bb805c72723ed74f08e5806cd8463ca2554a62abb4f97b9d19c0398a8a7c55"
+    },
+    {
+      "file": "pdf/osha-3885.pdf",
+      "url": "https://web.archive.org/web/20260318160010id_/https://www.osha.gov/sites/default/files/publications/OSHA3885.pdf",
+      "sha256": "209904217bfdc77298e79b24f5fd89c3e9da31a79409eef123612f7c2b82cc20"
+    }
+  ]
+}
