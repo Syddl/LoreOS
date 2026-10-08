@@ -96,7 +96,11 @@ def _heading_title(text: str) -> str:
     # CommonMark: a closing run of #s counts only after a space or tab, or when it is the whole content.
     if not (body := text.rstrip("#")) or body[-1] in " \t":
         text = body.rstrip(" \t")
-    text = HTML_TAG.sub("", text).rstrip()
+    # Tags go only outside `code spans`, where a reader sees the brackets. A backtick with no partner opens no span.
+    # ponytail: single backticks only; a ``double`` span containing a lone ` is split as two spans.
+    parts = text.split("`")
+    closed = len(parts) if len(parts) % 2 else len(parts) - 1  # parts past the last pair are outside any span
+    text = "`".join(HTML_TAG.sub("", part) if i % 2 == 0 or i >= closed else part for i, part in enumerate(parts)).rstrip()
     # String search, not a regex: a pattern for the trailing block rescans from every "{#", quadratic on a hostile line.
     if text.endswith("}") and (i := text.rfind("{#")) != -1 and "}" not in text[i + 2 : -1]:
         text = text[:i]

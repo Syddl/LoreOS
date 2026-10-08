@@ -84,6 +84,9 @@ def test_markdown_crlf_and_bom():
         ("## Values <= 10 and >= 5", "Values <= 10 and >= 5"),
         ("## a <!-- note --> b", "a  b"),
         ("## Title {#id} ##", "Title"),
+        ("## `Vec<T>` API", "`Vec<T>` API"),  # inside a code span a reader sees the brackets
+        ("## <b>Bold</b> and `<i>`", "Bold and `<i>`"),
+        ("## a ` <b>x</b>", "a ` x"),  # an unmatched backtick opens no code span
     ],
 )
 def test_heading_text_drops_anchor_and_html_tags(line, title):
