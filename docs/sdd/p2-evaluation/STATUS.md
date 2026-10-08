@@ -9,7 +9,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Open tasks
 
-- Step 5: plan review of [plan.md](plan.md).
+- Step 5: the plan review said "fix then re-review" ([reviews/plan.md](reviews/plan.md)). The plan is revised; a re-review of the revision is pending.
 - Window A (tasks 1.1 to 1.6), then 2.1, then window C (3.1, 3.2, 3.3).
 - Phase 4, the operator's part:
   1. Write `eval/questions.jsonl`.
@@ -20,7 +20,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Dispatch the plan reviewer (plan lens) on [plan.md](plan.md) against the current tree.
+Re-review the revised plan, then dispatch window A (six implementers, one worktree each).
 
 ## Blockers
 
@@ -30,7 +30,6 @@ Dispatch the plan reviewer (plan lens) on [plan.md](plan.md) against the current
 ## Steps run differently
 
 - Steps 1 to 3: the brief and the drafted spec existed. The spec was revised against P1 and research before planning; its section "Revised against P1" lists each change.
-- Step 6: implementers in a parallel window write files and do not commit, because one shared index would let one task's commit take another's staged files. The main session commits each task alone, with explicit paths, after reading its diff and report.
 
 ## Verification ledger
 
