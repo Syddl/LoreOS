@@ -12,8 +12,7 @@ KINDS = {".md": "md", ".markdown": "md", ".txt": "txt", ".pdf": "pdf"}
 FRONT_MATTER = re.compile(r"\A---\n.*?\n(?:---|\.\.\.)(?:\n|\Z)", re.S)
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 HEADING = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
-HTML_TAG = re.compile(r"<[^>]+>")
-ANCHOR = re.compile(r"\{#[^}]*\}\s*$")
+HTML_TAG = re.compile(r"<[^<>]+>")  # stops at the next "<", so a line of "<" is scanned once, not quadratically
 
 
 @dataclass
@@ -92,7 +91,11 @@ def _markdown(text: str) -> list[Section]:
 
 def _heading_title(text: str) -> str:
     """The heading as a reader sees it: no HTML tags, no trailing {#id} attribute block."""
-    return ANCHOR.sub("", HTML_TAG.sub("", text)).strip()
+    text = HTML_TAG.sub("", text).rstrip()
+    # String search, not a regex: a pattern for the trailing block rescans from every "{#", quadratic on a hostile line.
+    if text.endswith("}") and (i := text.rfind("{#")) != -1 and "}" not in text[i + 2 : -1]:
+        text = text[:i]
+    return text.strip()
 
 
 def _pdf(data: bytes) -> list[Section]:

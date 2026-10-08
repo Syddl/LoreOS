@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from loreos.parsing import ParseError, Section, UnsupportedType, kind_of, parse
@@ -85,6 +87,17 @@ def test_heading_text_drops_anchor_and_html_tags(line, title):
 def test_cleaned_headings_nest_into_a_clean_path():
     text = '## Teams {#teams}\n\n### <i class="fas fa-tasks"></i>Compliance\n\nbody\n'
     assert parse("a.md", text.encode()) == [Section(["Teams", "Compliance"], None, "body")]
+
+
+@pytest.mark.parametrize(
+    "title",
+    [" " * 200_000 + "x", "{#" * 100_000, "<" * 200_000],
+    ids=["spaces", "anchor-openers", "tag-openers"],
+)
+def test_hostile_heading_parses_in_linear_time(title):
+    start = time.perf_counter()
+    parse("a.md", f"## {title}\n\nbody\n".encode())
+    assert time.perf_counter() - start < 1
 
 
 def test_txt_is_one_section():
