@@ -247,7 +247,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
 - Depends on: 1.1, 1.2, 1.3, 1.4, 1.5
 - Change:
   - **Workspace and git helpers**: `workspace_name` (a key that includes `OPENAI_BASE_URL`), `workspace_status`, `load_corpus`, `git_sha` and `tree_clean` per the contract.
-  - **`evaluate(mode, limit, preflight_sha)`**:
+  - **`evaluate(mode, limit, preflight_sha, preflight_notes)`** (the notes were added after the whole-branch review):
     1. Clears `llm.USAGE`.
     2. Finds or creates the workspace by name, then ingests each corpus file in its own `workspace_session`. Any file not `processed` stops the run, naming the file and its stored error, before any answer call.
     3. Runs the questions: search with k=10, timed, then `answer_from_hits` with the first 5. A non-API exception from answering is recorded as refused, with reason `answer_error`, the error on the row and a note. An `openai.APIError` propagates.

@@ -22,7 +22,7 @@ The reviewer read window C (preflight, CLI, calibration, fetch) in full, since i
 |---|---|---|
 | minor | `npm run paid:eval --lim=5` (an abbreviation npm takes as its own config) would start a full paid run | `863f2aa`: any `npm_config_<k>` whose flag is a prefix of `--limit` or `--mode` is refused with the `--` form. npm's own settings pass. Both have tests. A misspelling (`--limt`) is still swallowed (a `ponytail:` note) |
 | minor | `tree_clean` obeyed `status.showUntrackedFiles=no`, so an uncommitted question set could go unseen | `863f2aa`: `git status --porcelain --untracked-files=normal`; the test sets that config |
-| minor | The preflight's fallbacks (an unverified model list, broad labels) only printed, and `settings` did not show a non-OpenAI server | `863f2aa`: `preflight` returns `(sha, notes)`, which the run puts first in `notes`. `settings.openai_base_url_host` records the host only. The spec and the plan contracts are amended |
+| minor | The preflight's fallbacks (an unverified model list, broad labels) only printed, and `settings` did not show a non-OpenAI server | `863f2aa`: `preflight` returns `(sha, notes)`, which the run puts first in `notes`, ahead of any usage note (since the re-review). `settings.openai_base_url_host` records the host only. The spec and the plan contracts are amended |
 | minor | `HTML_TAG` stripped brackets inside code spans (``## `Vec<T>` API``) | `dc95b19`: tags are stripped only outside backtick spans, still linear. An unmatched backtick opens no span |
 | minor | An agent could fill in `human` grades or questions with the edit tool | `bbb8051`: `eval/questions.jsonl` and `eval/judge_calibration.jsonl` are under `protected_paths.ask`. `check:spend` pins both, the deny on `eval/results/`, and an unguarded control |
 | nit | The README missed the faithfulness rule, the need to commit the inputs first, and the merge method | `863f2aa`: all three added |
@@ -41,3 +41,17 @@ Out of scope, noted by the reviewer: P1's `answering.MARKER` (`\s*\[`) is quadra
 - No redproof was re-run.
 - The npm abbreviation and git config behaviours came from knowledge of the tools. The fixes now have tests that exercise them.
 - CI, Linux and a cp1252 console were not observed.
+
+# Re-review: the fix wave (correctness and spend)
+
+Reviewer: `harness:reviewer`, fresh context. Diff `736f138..7b84eff`. Verdict: **merge**.
+
+Executed: `npm run check:all` gave hooks 395/395, agent-hooks 7/7, backend 323 passed and 2 skipped, spend 98/98. The reviewer read the npm 10.9.7 config sources to judge the flag handling. Every earlier finding was confirmed fixed in the code.
+
+| Severity | Finding | Resolution |
+|---|---|---|
+| minor | npm expands `--l` and `--m` into its own `--long` and `--message`, so the `l` test case pinned a name npm never sets | Confirmed free with `npm run env --l --li --m=x --mo`, which shows `npm_config_long`, `npm_config_li`, `npm_config_message` and `npm_config_mo`. The test now uses `li`, and `long` and `message` are pinned as npm's own settings. The `ponytail:` note says `--l N` exits 2 on the stray N and `--m X` runs the default mode |
+| nit | A usage note could come before the preflight's notes | The run builds notes as the preflight's, then the usage note, then the run's own; a test pins the order |
+| nit | No timing case for the code-span split | Added 200k backticks and 100k "`<a" to the linear-time test |
+| nit | "Host only" was not pinned against credentials, port or path | A test with `http://user:secret@proxy.example:8443/v1` expects `proxy.example`, with no `secret` or `8443` in the file |
+| nit | The plan's 2.1 signature and spec acceptance row 5 were stale | Both updated |
