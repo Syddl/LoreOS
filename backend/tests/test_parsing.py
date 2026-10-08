@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from loreos.parsing import ParseError, Section, UnsupportedType, kind_of, parse
@@ -62,6 +64,65 @@ def test_markdown_drops_front_matter_and_keeps_fenced_hashes():
 def test_markdown_crlf_and_bom():
     sections = parse("a.md", "﻿# One\r\n\r\nbody\r\n".encode())
     assert sections == [Section(["One"], None, "body")]
+
+
+@pytest.mark.parametrize(
+    ("line", "title"),
+    [
+        ("## Title {#id}", "Title"),
+        ("## Collaboration{#collab}", "Collaboration"),
+        ("## 🤝 Collaboration{#collaboration}", "🤝 Collaboration"),
+        ("#### Traveling with 1Password{#travel-mode}", "Traveling with 1Password"),
+        ('## <i class="fas"></i>Compliance', "Compliance"),
+        ('## <i class="fas fa-tasks fa-fw color-orange font-awesome"></i>Compliance', "Compliance"),
+        ("## Use {braces} here", "Use {braces} here"),
+        ("## Ends in {braces}", "Ends in {braces}"),
+        ("## {#only-an-anchor}", ""),
+        ('## <i class="x"></i>Title', "Title"),
+        ("## </b>Title", "Title"),
+        ("## x < 5 and y > 3", "x < 5 and y > 3"),
+        ("## Values <= 10 and >= 5", "Values <= 10 and >= 5"),
+        ("## a <!-- note --> b", "a  b"),
+        ("## Title {#id} ##", "Title"),
+        ("## `Vec<T>` API", "`Vec<T>` API"),  # inside a code span a reader sees the brackets
+        ("## <b>Bold</b> and `<i>`", "Bold and `<i>`"),
+        ("## a ` <b>x</b>", "a ` x"),  # an unmatched backtick opens no code span
+    ],
+)
+def test_heading_text_drops_anchor_and_html_tags(line, title):
+    assert parse("a.md", f"{line}\n\nbody\n".encode()) == [Section([title], None, "body")]
+
+
+@pytest.mark.parametrize(
+    ("line", "title"),
+    [
+        ("## foo ##   ", "foo"),
+        ("## foo\t#", "foo"),
+        ("## foo#", "foo#"),
+        ("## foo ## bar", "foo ## bar"),
+        ("## foo # #", "foo #"),
+        ("### ###", ""),
+        ("#\t", ""),
+    ],
+)
+def test_closing_hashes_follow_commonmark(line, title):
+    assert parse("a.md", f"{line}\n\nbody\n".encode()) == [Section([title], None, "body")]
+
+
+def test_cleaned_headings_nest_into_a_clean_path():
+    text = '## Teams {#teams}\n\n### <i class="fas fa-tasks"></i>Compliance\n\nbody\n'
+    assert parse("a.md", text.encode()) == [Section(["Teams", "Compliance"], None, "body")]
+
+
+@pytest.mark.parametrize(
+    "title",
+    [" " * 200_000 + "x", "{#" * 100_000, "<" * 200_000, "<a" * 100_000, "a" + " " * 200_000 + "b", "`" * 200_000, "`<a" * 100_000],
+    ids=["spaces", "anchor-openers", "tag-openers", "tag-name-openers", "interior-spaces", "backticks", "code-span-tag-openers"],
+)
+def test_hostile_heading_parses_in_linear_time(title):
+    start = time.perf_counter()
+    parse("a.md", f"## {title}\n\nbody\n".encode())
+    assert time.perf_counter() - start < 1
 
 
 def test_txt_is_one_section():
