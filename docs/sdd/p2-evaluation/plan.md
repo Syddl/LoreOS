@@ -79,7 +79,7 @@ Implements [spec.md](spec.md). Sizing: all fourteen lifecycle steps, since `paid
 | Window | Tasks | Shared files (must be none) |
 |---|---|---|
 | A | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, each in its own worktree | none: `conftest.py` belongs to 1.5 alone |
-| B | 2.1 | none |
+| B | 2.1, 1.7 | none: 1.7 owns only `parsing.py` and `test_parsing.py` |
 | C | 3.1, 3.2, each in its own worktree; then 3.3 by the main session | none: `package.json`, `fetch.py`'s `main` and `test_eval_fetch.py` belong to 3.1 |
 
 `.env.example` gains `JUDGE_MODEL` from the main session before window A, since editing it asks the operator. `test_config.py` stays red until task 1.5 lands, and only 1.5 runs it.
@@ -228,6 +228,19 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
 - Skills to load: none
 - Predicted size: 2 files, about 30 lines, 15 minutes
 
+### Task 1.7: Linear-time heading match (found by 1.6)
+
+- Files owned: `backend/loreos/parsing.py`, `backend/tests/test_parsing.py`
+- Depends on: 1.6
+- Change: The lazy `(.*?)` in P1's `HEADING` regex retries the closing-`#` and trailing-space alternatives at every position. `"## a" + " " * n + "b"` takes 16 s at n = 40k, so one hostile upload can hold a worker. The fix:
+  - `HEADING` matches only the opening hashes and the rest of the line.
+  - A small helper removes a closing `#` sequence (only when a space or tab precedes it) and the trailing whitespace, in linear time.
+  - Every existing parsing test keeps its result.
+- Acceptance check: `uv --directory backend run python -m pytest tests/test_parsing.py` green, with `"## a" + " " * 200_000 + "b"` added to the timing test (under 1 second).
+- Red first: the new timing case takes minutes on the current regex, so it is run with a smaller n (20k, about 4 s) to show red against the one-second bound. The implementer runs its own `redproof` (restoring the lazy regex), since `parsing.py` matches no spend pattern.
+- Skills to load: none
+- Predicted size: 2 files, about 30 lines, 20 minutes
+
 ### Task 2.1: The run
 
 - Files owned: `backend/loreos/evaluation/run.py`, `backend/tests/test_eval_run.py`
@@ -237,7 +250,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
   - **`evaluate(mode, limit, preflight_sha)`**:
     1. Clears `llm.USAGE`.
     2. Finds or creates the workspace by name, then ingests each corpus file in its own `workspace_session`. Any file not `processed` stops the run, naming the file and its stored error, before any answer call.
-    3. Runs the questions: search with k=10, timed, then `answer_from_hits` with the first 5.
+    3. Runs the questions: search with k=10, timed, then `answer_from_hits` with the first 5. A non-API exception from answering is recorded as refused, with reason `answer_error`, the error on the row and a note. An `openai.APIError` propagates.
     4. Judges each non-refused answer with only its cited passages, `{n, source, text}` built from the answer's citations, under their original numbers. A `VerdictError` is recorded on the row and in `notes`.
     5. Judges the calibration rows, unless `limit` is set.
     6. Calls `metrics.summarize` and builds the result. Its `usage` block maps `llm.USAGE` keys, and a non-zero `responses_without_usage` adds a note.

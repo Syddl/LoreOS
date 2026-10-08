@@ -55,7 +55,7 @@ Kill switch: none. Offline tooling, plus one parser fix that changes heading tex
    - **Verdict failures**: a refusal, no parsed verdict, or a length or content-filter stop. The error is recorded on that row and in `notes`, and the answer leaves the faithfulness denominator.
    - **API failures**: any `openai.APIError`, such as a bad key, an unknown model, an unsupported parameter, an exhausted quota, or the network. These mean the judge itself is broken, so the run stops.
 
-   Any stop, a Ctrl-C included, first writes what was done to scratch with the error in `notes`, since that output was already paid for.
+   An answer that fails without an API error is recorded as refused, with reason `answer_error` and the error on the row and in `notes`. That covers no parsed answer and a length or content-filter stop: the user would get no answer either. An `openai.APIError` while answering stops the run, as it does for the judge. Any stop, a Ctrl-C included, first writes what was done to scratch with the error in `notes`, since that output was already paid for.
 8. Metric definitions. "Refused" means the answer's `found` is false, for any reason.
    - Recall@5: over answerable questions, the mean of (labeled sources matched by any of the top 5 hits) / (labeled sources).
    - MRR@10: over answerable questions, the mean of 1 / rank of the first hit relevant to any labeled source in the top 10, and 0 when there is none.
