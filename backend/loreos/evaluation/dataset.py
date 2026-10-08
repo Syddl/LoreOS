@@ -7,7 +7,7 @@ import hashlib
 import json
 import re
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from loreos import parsing
 
@@ -198,7 +198,7 @@ def manifest_problems(manifest: dict) -> list[str]:
             continue
         file = entry.get("file")
         label = file if _filled(file) else f"files[{i}]"
-        if not _filled(file) or "\\" in file or file.startswith("/") or ".." in file.split("/"):
+        if not _filled(file) or "\\" in file or file.startswith("/") or PureWindowsPath(file).drive or {"..", ".", ""} & set(file.split("/")):
             problems.append(f"{label}: file must be a relative path under eval/corpus/ with forward slashes and no '..'; fix it")
         else:
             names.append(file)

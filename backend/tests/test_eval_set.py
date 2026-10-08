@@ -164,6 +164,8 @@ MANIFEST_RULES = {
     "dotdot-path": (lambda m: m["files"][0].update(file="handbook/../on-call.md"), "handbook/../on-call.md", "relative path"),
     "leading-slash": (lambda m: m["files"][0].update(file="/handbook/on-call.md"), "/handbook/on-call.md", "relative path"),
     "backslash": (lambda m: m["files"][0].update(file="handbook\\on-call.md"), "handbook\\on-call.md", "forward slashes"),
+    "drive-letter": (lambda m: m["files"][0].update(file="C:/handbook/on-call.md"), "C:/handbook/on-call.md", "relative path"),
+    "dot-path": (lambda m: m["files"][0].update(file="handbook/./on-call.md"), "handbook/./on-call.md", "relative path"),
     "missing-file": (lambda m: m["files"][0].pop("file"), "files[1]", "file"),
     "ftp-url": (lambda m: m["files"][0].update(url="ftp://gitlab.com/on-call.md"), HANDBOOK, "url"),
     "missing-url": (lambda m: m["files"][0].pop("url"), HANDBOOK, "url"),
