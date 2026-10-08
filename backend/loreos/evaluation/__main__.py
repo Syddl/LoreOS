@@ -13,8 +13,19 @@ import sys
 from loreos.evaluation import preflight, run
 
 # npm reads a flag given before `--` as its own config, sets npm_config_<name> and drops it from the script's
-# arguments, so `npm run paid:eval --limit 5` would start a full paid run. Each maps to its corrected form.
+# arguments, so `npm run paid:eval --limit=5` would start a full paid run. Each maps to its corrected form, and an
+# abbreviation argparse would accept (--lim) counts too. ponytail: a misspelling (--limt) is still swallowed silently.
 NPM_SWALLOWED = {"limit": "npm run paid:eval -- --limit N", "mode": "npm run paid:eval -- --mode vector"}
+
+
+def _swallowed() -> str | None:
+    """The corrected form for a paid:eval flag npm took as its own config, if any."""
+    for key in os.environ:
+        if key.lower().startswith("npm_config_") and (typed := key[len("npm_config_") :].lower().replace("_", "-")):
+            for name, form in NPM_SWALLOWED.items():
+                if name.startswith(typed):
+                    return f"npm took --{typed} as its own option and dropped it; put it after the separator: {form}"
+    return None
 
 
 def _limit(text: str) -> int:
@@ -29,10 +40,9 @@ def _limit(text: str) -> int:
 
 def cli(argv: list[str]) -> int:
     """--help and --dry-run spend nothing; any argument argparse refuses exits 2 before the preflight."""
-    for name, form in NPM_SWALLOWED.items():
-        if os.environ.get(f"npm_config_{name}"):
-            print(f"npm took --{name} as its own option and dropped it; put it after the separator: {form}", file=sys.stderr)
-            return 2
+    if refusal := _swallowed():
+        print(refusal, file=sys.stderr)
+        return 2
     parser = argparse.ArgumentParser(prog="npm run paid:eval --", description="Score retrieval and answers against eval/questions.jsonl.")
     parser.add_argument("--mode", choices=run.MODES, default="vector", help="the retrieval mode (default: vector)")
     parser.add_argument("--limit", type=_limit, metavar="N", help="run only the first N questions and skip the calibration pass; the result goes to scratch")
@@ -44,11 +54,11 @@ def cli(argv: list[str]) -> int:
     # `npm run paid:eval --dry-run` (no `--`) passes no argument and sets npm_config_dry_run; honoured even with other
     # arguments, since a dry run is the safe reading.
     dry_run = args.dry_run or os.environ.get("npm_config_dry_run", "").lower() == "true"
-    sha = asyncio.run(preflight.preflight(args.limit))
+    sha, notes = asyncio.run(preflight.preflight(args.limit))
     if dry_run:
         print("dry run: preflight only, no paid call made")
         return 0
-    path = asyncio.run(run.evaluate(args.mode, args.limit, sha))
+    path = asyncio.run(run.evaluate(args.mode, args.limit, sha, notes))
     result = json.loads(path.read_text(encoding="utf-8"))
     print(f"\nresult: {path}\ndestination: {result['destination']}")
     for note in result["notes"]:

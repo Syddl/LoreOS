@@ -15,8 +15,9 @@ from loreos.evaluation import dataset, fetch, labels, run
 CALL_ALLOWANCE = 1000  # tokens per answer or judge call beside the passages: instructions, question, source labels, answer
 
 
-async def preflight(limit: int | None) -> str:
-    """Run the checks, print the planned calls and tokens, and return the commit the run must still be at when it writes."""
+async def preflight(limit: int | None) -> tuple[str, list[str]]:
+    """Run the checks and print the planned calls and tokens. Return the commit the run must still be at when it writes,
+    and the notes the result file must carry: each fallback taken and each warning printed here."""
     questions, calibration = _evaluation_set()
     manifest = _read(dataset.read_manifest, dataset.MANIFEST)
     if problems := dataset.manifest_problems(manifest):
@@ -36,14 +37,15 @@ async def preflight(limit: int | None) -> str:
     if problems := labels.label_problems(questions, entries):
         _refuse("labels that match no section of the corpus", problems)
     await smoke.preflight()  # the database, the migration head, and the key
-    await _check_models()
+    notes = await _check_models()
     if limit is None and not run.tree_clean():
         raise SystemExit("preflight: the git tree is not clean; commit or remove the changes, "
                          "since a committed result must name the code that produced it")
     await _print_plan(questions[:limit], len(questions), calibration if limit is None else None, manifest, corpus)
     for warning in labels.broad_labels(questions, entries):
         print(f"warning: {warning}")
-    return run.git_sha()
+        notes.append(f"broad label: {warning}")
+    return run.git_sha(), notes
 
 
 def _evaluation_set() -> tuple[list[dict], list[dict] | None]:
@@ -59,19 +61,20 @@ def _evaluation_set() -> tuple[list[dict], list[dict] | None]:
     return questions, calibration
 
 
-async def _check_models() -> None:
-    """Each configured model is in the API's model list; a server without a model list leaves them unverified."""
+async def _check_models() -> list[str]:
+    """Each configured model is in the API's model list; a server without a model list leaves them unverified, noted."""
     try:
         async with llm.client() as client:
             listed = {model.id for model in (await client.models.list()).data}
     except openai.APIStatusError as e:  # a compatible server without /models: ambiguous, so go on, as paid:smoke does
         print(f"preflight: listing models returned {e.status_code}; the model names are unverified, continuing")
-        return
+        return [f"models: listing models returned {e.status_code}; the model names are unverified"]
     except openai.OpenAIError as e:
         raise SystemExit(f"preflight: cannot list the models ({type(e).__name__}: {e}); check the network and OPENAI_BASE_URL") from e
     models = {"EMBEDDING_MODEL": settings.embedding_model(), "ANSWER_MODEL": settings.answer_model(), "JUDGE_MODEL": settings.judge_model()}
     if missing := [f"{env}={model}" for env, model in models.items() if model not in listed]:
         raise SystemExit(f"preflight: the API lists no model {', '.join(missing)}; set each in .env to a model your key can use")
+    return []
 
 
 async def _print_plan(asked: list[dict], total: int, calibration: list[dict] | None, manifest: dict, corpus: dict[str, bytes]) -> None:

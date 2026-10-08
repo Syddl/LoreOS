@@ -80,8 +80,8 @@ def write_corpus(files):
     dataset.MANIFEST.write_text(json.dumps(manifest(files)), encoding="utf-8")
 
 
-def evaluate(limit=None):
-    return asyncio.run(run.evaluate("vector", limit, SHA))
+def evaluate(limit=None, preflight_notes=()):
+    return asyncio.run(run.evaluate("vector", limit, SHA, list(preflight_notes)))
 
 
 def load(path):
@@ -144,6 +144,7 @@ def test_a_full_run_writes_every_field_to_the_results_dir(ev):
     assert result["settings"] == {
         "embedding_model": settings.embedding_model(), "answer_model": settings.answer_model(), "judge_model": settings.judge_model(),
         "chunk_tokens": chunking.CHUNK_TOKENS, "chunk_overlap": chunking.CHUNK_OVERLAP, "k": 5, "search_k": 10,
+        "openai_base_url_host": "0.0.0.0",
     }
     the_manifest = dataset.read_manifest(dataset.MANIFEST)
     assert result["corpus_hash"] == dataset.corpus_hash(the_manifest)
@@ -294,6 +295,11 @@ DESTINATION_CASES = {
     "limit": (lambda ev, mp: None, 4, "scratch: --limit 4 was given"),
     "no-calibration-file": (lambda ev, mp: dataset.CALIBRATION.unlink(), None, "scratch: the judge graded 0 of 0 calibration rows"),
     "judge-always-fails": (lambda ev, mp: setattr(ev.judge, "reply", llm.VerdictError("refused")), None, "scratch: faithfulness is null"),
+    "one-answer-verdict-fails": (
+        lambda ev, mp: wrap(mp, "judge", raise_on(questions(4, unanswerable=1)[2]["question"], llm.VerdictError("refused"))),
+        None,
+        "scratch: the judge gave no verdict on 1 of 4 answers",
+    ),
     "one-calibration-verdict-fails": (
         lambda ev, mp: wrap(mp, "judge", raise_on("Calibration question 7?", llm.VerdictError("refused"))),
         None,
@@ -379,9 +385,15 @@ def test_a_stop_mid_loop_writes_the_completed_rows_to_scratch_and_re_raises(ev, 
     assert partial["notes"][-1] == f"stopped: {type(error).__name__}: {error}"
 
 
+def test_the_preflight_notes_and_the_api_host_reach_the_result(ev):
+    result = load(evaluate(limit=1, preflight_notes=["models: listing models returned 404; the model names are unverified"]))
+    assert result["notes"][0] == "preflight: models: listing models returned 404; the model names are unverified"
+    assert result["settings"]["openai_base_url_host"] == "0.0.0.0"  # conftest's base URL; the host only, never the URL
+
+
 def test_only_the_vector_mode_runs():
     with pytest.raises(ValueError, match="'hybrid'"):
-        asyncio.run(run.evaluate("hybrid", None, SHA))
+        asyncio.run(run.evaluate("hybrid", None, SHA, []))
 
 
 def test_every_committed_result_passes_the_committed_result_check():
@@ -410,7 +422,8 @@ def test_the_git_helpers_read_the_repo_root(tmp_path, monkeypatch):
     (tmp_path / ".git" / "info" / "exclude").write_text("ignored.txt\n")
     (tmp_path / "ignored.txt").write_text("ignored files do not count")
     assert run.tree_clean() is True
-    (tmp_path / "new.txt").write_text("untracked files do")
+    subprocess.run(["git", "config", "status.showUntrackedFiles", "no"], cwd=tmp_path, check=True)
+    (tmp_path / "new.txt").write_text("untracked files do, whatever the repo's git config says")
     assert run.tree_clean() is False
     with pytest.raises(RuntimeError, match="git rev-parse HEAD failed"):
         run.git_sha()  # no commit yet

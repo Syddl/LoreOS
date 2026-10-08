@@ -93,7 +93,7 @@ Implements [spec.md](spec.md). Sizing: all fourteen lifecycle steps, since `paid
 | 1.3 | 2.1 | `summarize(rows, calibration) -> {"metrics", "judge_confusion", "latency_ms", "counts"}` over the row shape below. `percentile(values, q) -> float \| None`, by nearest rank. |
 | 1.4 | 3.1 | - `corpus_problems(manifest, corpus_dir) -> list[str]`: each file missing or with the wrong sha256, by raw bytes.<br>- `fetch(manifest, corpus_dir) -> list[str]`: the problems found; downloads with `urllib.request`.<br>- `main() -> int`. |
 | 1.5 | 2.1, 3.1 | **Usage and verdicts**:<br>- `llm.USAGE`, a `collections.Counter` with keys `embedding_input`, `answer_input`, `answer_output`, `judge_input`, `judge_output` and `responses_without_usage`.<br>- `llm.Verdict`.<br>- `llm.VerdictError(RuntimeError)`.<br>**Functions**:<br>- `async llm.judge(question, answer, passages: list[dict{n, source, text}]) -> Verdict`.<br>- `llm.source_label(hit_or_citation) -> str`, renamed from `_source`.<br>**Settings**: `settings.judge_model()` and `settings.DEFAULT_JUDGE_MODEL = "gpt-6.1-sol"`.<br>**Test fixture**: conftest `fake_judge`, with `.reply` (a `Verdict`, or an exception to raise) and `.calls` (a list of `(question, answer, passages)`). |
-| 2.1 | 3.1, 3.2 | **Corpus and workspace**:<br>- `run.workspace_name(manifest) -> str`.<br>- `async run.workspace_status(name, corpus) -> (workspace_id \| None, reused: bool)`.<br>- `run.load_corpus(manifest) -> dict[str, bytes]`.<br>**Git**: `run.git_sha() -> str`, `run.tree_clean() -> bool`.<br>**The paid part**: `async run.evaluate(mode, limit, preflight_sha: str) -> Path`. It runs after the preflight, which records `git_sha()`.<br>**Result**: the result file shape in the spec, with rows as below. |
+| 2.1 | 3.1, 3.2 | **Corpus and workspace**:<br>- `run.workspace_name(manifest) -> str`.<br>- `async run.workspace_status(name, corpus) -> (workspace_id \| None, reused: bool)`.<br>- `run.load_corpus(manifest) -> dict[str, bytes]`.<br>**Git**: `run.git_sha() -> str`, `run.tree_clean() -> bool`.<br>**The paid part**: `async run.evaluate(mode, limit, preflight_sha: str, preflight_notes: list[str]) -> Path`. It runs after the preflight, which records `git_sha()` and the notes the result must carry (amended after the whole-branch review).<br>**Result**: the result file shape in the spec, with rows as below. |
 
 Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
 
@@ -280,7 +280,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
 - Files owned: `backend/loreos/evaluation/preflight.py`, `backend/loreos/evaluation/__main__.py`, `backend/loreos/evaluation/fetch.py` (`main` only), `backend/tests/test_eval_preflight.py`, `backend/tests/test_eval_cli.py`, `backend/tests/test_eval_fetch.py`, `package.json`
 - Depends on: 2.1
 - Change:
-  - **`preflight(limit) -> str`** runs spec behaviour 4 in order and returns `run.git_sha()`. Model names are checked with one `models.list` through `llm.client()`; an `APIStatusError` there is noted and skipped, as `paid:smoke` does. It prints the plan:
+  - **`preflight(limit) -> (str, list[str])`** runs spec behaviour 4 in order and returns `run.git_sha()` with its notes (the unverified model list and each broad label; amended after the whole-branch review). Model names are checked with one `models.list` through `llm.client()`; an `APIStatusError` there is noted and skipped, as `paid:smoke` does. It prints the plan:
     - question counts;
     - embed calls and exact corpus tokens (0 when reused), from `chunking.count_tokens` over `ingest.embedding_input` of every chunk;
     - answer calls and judge calls (up to answers + `CALIBRATION_ROWS`);
@@ -290,7 +290,7 @@ Row shape (one per question; 1.3 reads it, 2.1 writes it, 3.2 reads it):
     - Unknown arguments exit 2.
     - `npm_config_dry_run=true` with no arguments is a dry run.
     - `npm_config_limit` or `npm_config_mode` set exits 2 and prints the `--` form.
-    - Otherwise it runs `preflight`, then `run.evaluate(mode, limit, sha)`, and prints the result path and metrics.
+    - Otherwise it runs `preflight`, then `run.evaluate(mode, limit, sha, notes)`, and prints the result path and metrics.
   - **`fetch.main`** also writes `dataset.CORPUS_DIR / "outline.txt"` when every file is good.
   - **`package.json`** gains `eval:fetch`, `eval:calibration-draft` and `paid:eval`, before the `check:*` group.
 - Acceptance check: `uv --directory backend run python -m pytest tests/test_eval_preflight.py tests/test_eval_cli.py tests/test_eval_fetch.py` green.

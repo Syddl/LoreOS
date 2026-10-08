@@ -123,7 +123,7 @@ def pf(tmp_path, monkeypatch):
     assert state.paid == []
 
 
-def check(state, limit=None) -> str:
+def check(state, limit=None) -> tuple[str, list[str]]:
     """Write the state's files (a None list writes nothing), then run the preflight."""
     for file, data in state.files.items():
         path = dataset.CORPUS_DIR / file
@@ -227,14 +227,17 @@ def test_every_unlisted_model_is_named_with_its_variable(pf, monkeypatch):
 
 def test_a_server_without_a_model_list_goes_on_unverified(pf, clean, capsys):
     pf.models_error = openai.NotFoundError("not found", response=httpx2.Response(404, request=REQUEST), body=None)
-    assert check(pf) == SHA
+    sha, notes = check(pf)
+    assert sha == SHA
     assert "listing models returned 404; the model names are unverified" in capsys.readouterr().out
     assert pf.calls == ["smoke", "models", "tree"]
+    # the result file records it too (the run puts the preflight's notes in its own), not only the console
+    assert notes[0] == "models: listing models returned 404; the model names are unverified"
 
 
 def test_a_limit_skips_the_tree_check(pf, clean, capsys):
     pf.clean = False
-    assert check(pf, limit=2) == SHA
+    assert check(pf, limit=2)[0] == SHA
     assert pf.calls == ["smoke", "models"]
     out = capsys.readouterr().out
     assert "plan: 2 of 13 questions (2 answerable, 0 unanswerable)" in out
@@ -243,7 +246,9 @@ def test_a_limit_skips_the_tree_check(pf, clean, capsys):
 
 def test_the_plan_counts_every_call_and_warns_about_broad_labels(pf, clean, monkeypatch, capsys):
     monkeypatch.setattr(llm, "EMBED_BATCH", 3)  # the Markdown file's 4 chunks take 2 calls and the PDF's 2 take 1
-    assert check(pf) == SHA
+    sha, notes = check(pf)
+    assert sha == SHA
+    assert notes == [f'broad label: a3: {MD}: heading "Guide" spans 4 chunks; label a narrower heading if one answers']
     assert pf.calls == ["smoke", "models", "tree"]
     out = capsys.readouterr().out
     name = run.workspace_name(pf.manifest)
@@ -267,7 +272,7 @@ def test_without_a_calibration_file_the_judge_grades_only_the_answers(pf, clean,
 
 
 def test_the_corpus_token_count_is_what_ingest_sends_to_the_embedder(pf, clean, fake_embed, capsys):
-    assert check(pf) == SHA
+    assert check(pf)[0] == SHA
     assert fake_embed == []  # the preflight embedded nothing
     name = run.workspace_name(pf.manifest)
     found = re.search(rf"workspace {name} to build; corpus embedding (\d+) tokens in 2 embed calls", capsys.readouterr().out)

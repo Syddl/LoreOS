@@ -16,6 +16,7 @@ import uuid
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import openai
 from sqlalchemy import text
@@ -76,7 +77,7 @@ def git_sha() -> str:
 
 def tree_clean() -> bool:
     """No tracked change and no untracked file; ignored files do not count."""
-    return _git("status", "--porcelain") == ""
+    return _git("status", "--porcelain", "--untracked-files=normal") == ""  # whatever status.showUntrackedFiles says
 
 
 def _git(*args: str) -> str:
@@ -90,8 +91,8 @@ def _git(*args: str) -> str:
     return done.stdout
 
 
-async def evaluate(mode: str, limit: int | None, preflight_sha: str) -> Path:
-    """Run the evaluation and write its result file; return the file's path.
+async def evaluate(mode: str, limit: int | None, preflight_sha: str, preflight_notes: list[str]) -> Path:
+    """Run the evaluation and write its result file; return the file's path. The preflight's notes open `notes`.
 
     The result goes to eval/results/ only when every destination rule holds (spec behaviour 5), else to scratch with
     each reason in `notes`. Any stop, Ctrl-C included, first writes the completed rows to scratch, then re-raises.
@@ -107,7 +108,7 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str) -> Path:
     workspace = {"name": workspace_name(manifest), "reused": None}
     rows: list[dict] = []
     pairs: list[dict] = []
-    notes: list[str] = []
+    notes: list[str] = [f"preflight: {note}" for note in preflight_notes]
     llm.USAGE.clear()
 
     def build() -> dict:
@@ -127,6 +128,8 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str) -> Path:
                 "chunk_overlap": chunking.CHUNK_OVERLAP,
                 "k": answering.TOP_K,
                 "search_k": SEARCH_K,
+                # The host alone (never the URL, which may carry credentials): it tells an OpenAI run from another server's.
+                "openai_base_url_host": urlsplit(base).hostname if (base := settings.openai_base_url()) else None,
             },
             "corpus_hash": dataset.corpus_hash(manifest),
             "questions_hash": questions_hash,
@@ -276,6 +279,10 @@ def _scratch_reasons(result: dict, limit: int | None, preflight_sha: str) -> lis
                        f"a committed result needs all {dataset.CALIBRATION_ROWS} graded")
     if numbers["judge_agreement"] is None:
         reasons.append("judge agreement is null; grade eval/judge_calibration.jsonl and run again")
+    if counts["judge_errors"]:
+        answered = counts["judged"] + counts["judge_errors"]
+        reasons.append(f"the judge gave no verdict on {counts['judge_errors']} of {answered} answers, so faithfulness "
+                       "covers only part of them; see the verdict errors in notes and run again")
     if numbers["faithfulness"] is None:
         reasons.append("faithfulness is null, since the judge graded no answer; check the verdict errors in notes")
     if not tree_clean():

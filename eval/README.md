@@ -49,15 +49,20 @@ One JSON object per line in `questions.jsonl`:
 A run writes to `results/` only when all of these hold:
 - the run covered the full set of 60 to 100 questions;
 - the judge graded all 30 calibration rows;
-- the tree was clean;
+- the judge gave a verdict on every answer that was not refused;
+- the tree was clean, with `questions.jsonl` and the graded `judge_calibration.jsonl` committed;
 - HEAD did not move during the run.
 
-Otherwise it writes to scratch, and the file's `notes` say why. Faithful means every claim in the answer is supported by the passages it cites; outside knowledge does not count, even when it is true.
+Otherwise it writes to scratch, and the file's `notes` say why.
+
+A full run, and a dry run without `--limit`, need a clean tree. So commit `questions.jsonl`, and later the graded `judge_calibration.jsonl`, before running.
+
+Merge the branch that carries a result with a merge commit, not a squash or rebase. A squash or rebase drops the commit the result's `git_sha` names. Faithful means every claim in the answer is supported by the passages it cites; outside knowledge does not count, even when it is true.
 
 ## License of the files in this folder
 
 LoreOS's code is MIT. The corpus files are never committed. Two files here quote corpus passages: `judge_calibration.jsonl` and the files under `results/`. They are licensed as follows:
 
-- **Text from the GitLab Handbook** is CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). It comes from the GitLab Handbook by GitLab Inc., `gitlab.com/gitlab-com/content-sites/handbook`, at the commit pinned in `corpus.json`. Those passages, and these two files as adaptations containing them, are shared under CC BY-SA 4.0.
+- **Text from the GitLab Handbook** is CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). It comes from the GitLab Handbook by GitLab Inc., `gitlab.com/gitlab-com/content-sites/handbook`, at the commit pinned in `corpus.json`. Those passages, and these two files as adaptations containing them, are shared under CC BY-SA 4.0. The passages were modified: they are excerpts cut into chunks, and heading anchors (`{#id}`) and HTML tags were removed from their headings.
 - **Text from NIST CSWP 29, NIST AI 100-1 and NIST SP 800-88r2** is a US government work, republished courtesy of the National Institute of Standards and Technology.
 - **Text from OSHA 3885** (Recommended Practices for Safety and Health Programs) is a US government work, from the U.S. Department of Labor, Occupational Safety and Health Administration.

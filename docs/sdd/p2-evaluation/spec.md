@@ -25,7 +25,7 @@ Kill switch: none. Offline tooling, plus one parser fix that changes heading tex
 | `is_relevant(hit, source) -> bool` | function | `backend/loreos/evaluation/labels.py` | Same file, and the labeled heading path is a list prefix of the hit's, or the same page. |
 | Metrics | functions | `backend/loreos/evaluation/metrics.py` | Pure; per-question rows in, numbers out; `None` when the denominator is 0. |
 | Evaluation workspace key | function | `backend/loreos/evaluation/run.py` | Workspace named `eval-<12 hex>`, a sha256 over the corpus hash, the source text of `parsing.py`, `chunking.py` and `ingest.py` (line endings normalised), the source of `llm.embed` and `retrieval.vector_literal`, the installed pypdf and tiktoken versions, `CHUNK_TOKENS`, `CHUNK_OVERLAP`, the embedding model and `OPENAI_BASE_URL`. A changed input never reuses stale chunks. |
-| Result file | file format | `eval/results/<YYYYMMDDTHHMMSSZ>-<mode>-<sha8>.json` | `{schema: 1, git_sha, created_at, mode, settings: {embedding_model, answer_model, judge_model, chunk_tokens, chunk_overlap, k, search_k}, corpus_hash, questions_hash, calibration_hash, destination: "results" \| "scratch", workspace: {name, reused}, counts, metrics: {recall_at_5, mrr_at_10, citation_accuracy, unanswerable_refused, answerable_refused, faithfulness, judge_agreement}, judge_confusion, latency_ms: {search_p50, search_p95}, usage: {embedding_tokens, answer_input_tokens, answer_output_tokens, judge_input_tokens, judge_output_tokens}, notes: [...], questions: [...]}` |
+| Result file | file format | `eval/results/<YYYYMMDDTHHMMSSZ>-<mode>-<sha8>.json` | `{schema: 1, git_sha, created_at, mode, settings: {embedding_model, answer_model, judge_model, chunk_tokens, chunk_overlap, k, search_k, openai_base_url_host}, corpus_hash, questions_hash, calibration_hash, destination: "results" \| "scratch", workspace: {name, reused}, counts, metrics: {recall_at_5, mrr_at_10, citation_accuracy, unanswerable_refused, answerable_refused, faithfulness, judge_agreement}, judge_confusion, latency_ms: {search_p50, search_p95}, usage: {embedding_tokens, answer_input_tokens, answer_output_tokens, judge_input_tokens, judge_output_tokens}, notes: [...], questions: [...]}` |
 
 ## Behaviour
 
@@ -41,11 +41,11 @@ Kill switch: none. Offline tooling, plus one parser fix that changes heading tex
    - when listing models works, the embedding, answer and judge models are each in the list;
    - the git tree is clean, with no tracked change and no untracked file, unless `--limit` is given.
 
-   It prints the planned call counts and token estimate: corpus embedding tokens are counted exactly, and are 0 when the workspace is reused. It warns about each label whose section spans more than 3 chunks.
+   It prints the planned call counts and token estimate: corpus embedding tokens are counted exactly, and are 0 when the workspace is reused. It warns about each label whose section spans more than 3 chunks. The run copies each warning, and an unverified model list, into the result's `notes`. The result's `settings` record the host of `OPENAI_BASE_URL` (never the URL), so a run against another server is told apart.
 5. A result file goes to `eval/results/` only when every one of these holds:
    - the run had no `--limit` and covered 60 to 100 questions;
    - the judge graded every calibration row, so judge agreement is not null;
-   - faithfulness is not null;
+   - the judge gave a verdict on every non-refused answer, so faithfulness covers all of them and is not null;
    - the tree was clean at the preflight and is still clean before the write;
    - HEAD is the commit the preflight recorded.
 
