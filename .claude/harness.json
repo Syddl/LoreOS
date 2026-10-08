@@ -49,7 +49,8 @@
     "ask": [
       ".env", ".env.*", "package-lock.json", "uv.lock", "Dockerfile", "docker-compose.yml",
       ".github/workflows/ci.yml", "**/alembic/versions/**",
-      ".claude/harness.json", ".claude/settings.json", ".claude/hooks/**", ".codex/hooks.json", ".codex/hooks/**"
+      ".claude/harness.json", ".claude/settings.json", ".claude/hooks/**", ".codex/hooks.json", ".codex/hooks/**",
+      "eval/questions.jsonl", "eval/judge_calibration.jsonl"
     ],
     "deny": ["eval/results/**"]
   },

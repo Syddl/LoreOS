@@ -1,8 +1,9 @@
 // check-spend: the live .claude/harness.json spend patterns ask before every command that can bill
 // OpenAI (paid:* scripts in any runner, an interpreter touching the paid loreos modules, any HTTP
 // client naming the dev API's /api or port 8000) and stay quiet for the checks and the server.
-// No form is exempt, --dry-run included. Replays PreToolUse payloads through
-// .claude/hooks/guard.mjs as the main session would send them.
+// No form is exempt, --dry-run included. It also pins the edit-tool guard on a paid result's inputs
+// (the hand-written evaluation set and human grades ask; eval/results/ is denied). Replays PreToolUse
+// payloads through .claude/hooks/guard.mjs as the main session would send them.
 //
 // Does NOT exercise: the spellings docs/KNOWN-GAPS.md lists (a one-liner posting with its own HTTP
 // library, a script file, names held in variables, PowerShell backtick escapes, eval), a subagent
@@ -16,9 +17,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const guard = path.join(root, '.claude', 'hooks', 'guard.mjs');
 
 function decision(tool, command) {
+  // Edit and Write name a file (relative to the root) instead of a command.
+  const toolInput = tool === 'Edit' ? { file_path: path.join(root, command), old_string: 'a', new_string: 'b' }
+    : tool === 'Write' ? { file_path: path.join(root, command), content: 'x' }
+      : { command, description: 'x' };
   const input = JSON.stringify({
     session_id: 'check-spend', hook_event_name: 'PreToolUse', cwd: root, permission_mode: 'default',
-    tool_name: tool, tool_input: { command, description: 'x' },
+    tool_name: tool, tool_input: toolInput,
   });
   const r = spawnSync(process.execPath, [guard, 'PreToolUse'], { input, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: root, HARNESS_HOOKS: '' } });
   const text = (r.stdout || '').trim();
@@ -135,6 +140,17 @@ const cases = [
   ['Bash', 'grep -rn "http://127.0.0.1:8000/api/ask" docs', null],
   ['Bash', 'git commit -m "uv: loreos.smoke refuses args"', null],
   ['Bash', 'git add backend/loreos/smoke.py', null],
+  // The evaluation: every paid:eval form asks, the corpus fetch and the calibration draft are free, and a paid
+  // result's inputs are guarded. A model never fills in the hand-written set or the human grades by edit tool, and
+  // never writes a result.
+  ['Bash', 'npm run paid:eval -- --limit 5', 'ask'],
+  ['Bash', 'npm run paid:eval', 'ask'],
+  ['Bash', 'npm run eval:fetch', null],
+  ['Bash', 'npm run eval:calibration-draft -- docs/sdd/p2-evaluation/scratch/run1.json', null],
+  ['Edit', 'eval/questions.jsonl', 'ask'],
+  ['Write', 'eval/judge_calibration.jsonl', 'ask'],
+  ['Write', 'eval/results/20261008T120000Z-vector-12345678.json', 'deny'],
+  ['Edit', 'eval/README.md', null],
 ];
 
 let fail = 0;
