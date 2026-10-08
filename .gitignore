@@ -13,6 +13,9 @@ dist/
 # Scratch output
 docs/sdd/*/scratch/
 
+# Evaluation corpus: fetched by npm run eval:fetch, never committed, so the corpus licenses stay out of the repo.
+eval/corpus/
+
 # Added by harness init: runtime state, personal settings and lifecycle scratch stay out of git; the project layer is tracked.
 .claude/worktrees/
 .claude/checkpoints/
