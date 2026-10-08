@@ -9,19 +9,24 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Open tasks
 
-- Step 5: done. The plan review and its re-review are in [reviews/plan.md](reviews/plan.md); the re-review's fixes were applied to the plan.
-- Window A (1.1 to 1.6): done and cherry-picked. Every mutation proof passed, and `check:all` is green. The step 7 review of window A is pending.
-- Window B: 2.1 (the run) and 1.7 (a linear-time `HEADING` regex; 1.6 found the quadratic one). Then window C: 3.1 and 3.2; 3.3 is partly done.
-- Phase 4, the operator's part:
-  1. Write `eval/questions.jsonl`.
+- **Steps 4 to 7: done.**
+  - Plan review and re-review: [reviews/plan.md](reviews/plan.md).
+  - Tasks 1.1 to 1.7, 2.1, 3.1 and 3.2 are implemented, each by a fresh implementer in its own worktree, cherry-picked, and mutation-proven.
+  - Task reviews: [reviews/window-a.md](reviews/window-a.md) and [reviews/window-b.md](reviews/window-b.md). Their fixes are applied with tests.
+  - 3.3 (data and docs) is done by the main session.
+- **Step 7 for window C** (3.1, 3.2) is folded into the step 9 whole-branch review.
+- **Step 9**, the independent whole-branch review, is next. Then steps 11 and 12 (claim-green on the pushed tip, PR) wait on the operator's go-ahead to push.
+- **Step 8 and phase 4**, the operator's part:
+  1. Write `eval/questions.jsonl` from `eval/corpus/outline.txt`.
   2. Set `OPENAI_API_KEY`.
-  3. Run 1 to scratch.
-  4. `eval:calibration-draft`, then grade the 30 rows.
-  5. Run 2 to `eval/results/` (the baseline).
+  3. `npm run paid:eval -- --dry-run`.
+  4. Run 1 (to scratch).
+  5. `npm run eval:calibration-draft -- <run 1 file>`, then grade the 30 rows.
+  6. Run 2 (the baseline, to `eval/results/`), committed.
 
 ## Next step
 
-Integrate window B (2.1, 1.7) and the window A review, then window C.
+Dispatch the whole-branch review (independent reviewer) on `p2-evaluation` against `origin/main`.
 
 ## Blockers
 
@@ -30,12 +35,20 @@ Integrate window B (2.1, 1.7) and the window A review, then window C.
 
 ## Steps run differently
 
-- Steps 1 to 3: the brief and the drafted spec existed. The spec was revised against P1 and research before planning; its section "Revised against P1" lists each change.
+- **Steps 1 to 3**: the brief and the drafted spec existed. The spec was revised against P1 and research before planning; its section "Revised against P1" lists each change.
+- **Step 6, the mutation proofs**: the main session ran `redproof` after each cherry-pick, with the operator approving each ask. Inside a subagent, the spend guard refuses a command naming `loreos/evaluation` or `llm.py` next to `uv ... python`.
+  - Tasks 1.6 and 1.7 (`parsing.py`) ran their own.
+  - All passed: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 (two), 1.7, 2.1 (two), 3.1, 3.2, and the window B fix (wrapped API error).
+- **Step 6, the worktree base**: the Agent tool created each worktree from `main`, not `p2-evaluation`. Every implementer fast-forwarded to `p2-evaluation` before changing anything, and each cherry-pick applied cleanly.
+- **Step 10, the fix waves**: the main session made the review fixes itself, each red then green: `8b8acbc`, `2020f00`, `08564b9`, `f3826ad` and `999bc79`. The one exception was the `HTML_TAG` fix, which went to task 1.7's implementer. They were small and touched files whose tasks had closed. The step 9 review covers them.
+- **Task 1.7** was added during window B, after 1.6 found P1's `HEADING` regex quadratic on hostile Markdown.
 
 ## Verification ledger
 
 | date | branch | sha | suite | result | duration | not covered |
 |---|---|---|---|---|---|---|
+| 2026-10-08 (by hand, live) | p2-evaluation | 999bc79 | `npm run eval:fetch` against GitLab and Wayback | PASS | | 48 of 48 files downloaded, every sha256 matched; `outline.txt` written (790 sections). Not covered: a re-fetch after a host changes bytes |
+| 2026-10-08 (by hand, live) | p2-evaluation | 999bc79 | `npm run paid:eval -- --dry-run`, approved at the ask | PASS (expected exit 1) | | It stopped at the first preflight step, naming the missing `eval/questions.jsonl`; no paid call. Not covered: every later preflight step against Supabase and OpenAI (needs the set and the key) |
 
 ## Port ledger
 
