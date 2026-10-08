@@ -142,13 +142,16 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str) -> Path:
         }
 
     try:
+        print(f"workspace {workspace['name']}: ingesting {len(corpus)} files", flush=True)
         workspace_id, workspace["reused"] = await _ingest(workspace["name"], corpus)
         # ponytail: one question at a time keeps the search timings clean, and 100 questions take minutes;
         # run them concurrently if the set grows to thousands.
-        for question in questions:
+        for i, question in enumerate(questions, 1):
             row, row_notes = await _ask(workspace_id, question)
             rows.append(row)  # only a complete row, so a partial result's numbers match its rows
             notes.extend(row_notes)
+            outcome = (row["judge"]["grade"] or "no verdict") if row["judge"] else f"refused ({row['answer']['reason']})"
+            print(f"[{i}/{len(questions)}] {row['id']}: {outcome}", flush=True)  # a paid run is never silent for minutes
         if limit is not None:
             notes.append(f"calibration: skipped, since --limit {limit} was given")
         elif calibration is None:
