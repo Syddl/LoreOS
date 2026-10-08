@@ -16,8 +16,12 @@ The single carrier of state between sessions. Update it before a session ends; t
   - 3.3 (data and docs) is done by the main session.
 - **Step 7 for window C** (3.1, 3.2) was folded into the step 9 whole-branch review, which read those files in full.
 - **Step 9**: done, verdict "fix then merge" ([reviews/branch.md](reviews/branch.md)).
-- **Step 10**: the fixes are in `dc95b19`, `3378a9e`, `863f2aa` and `bbb8051`; their re-review is pending.
-- **Steps 11 and 12** (claim-green on the pushed tip, then the PR) wait on the operator's go-ahead to push.
+- **Step 10**: done.
+  - The fixes are in `dc95b19`, `3378a9e`, `863f2aa`, `bbb8051` and `66121ab`.
+  - Their re-review said merge ([reviews/branch.md](reviews/branch.md)).
+- **Step 11**: claim-green PASS on the pushed tip `3f765ba0`.
+- **Step 12**: a draft PR, at the operator's choice. It is marked ready once the baseline is committed on this branch, and merged with a merge commit so the result's `git_sha` stays on `main`.
+- **Steps 13 and 14**: open until the baseline lands and the PR merges.
 - **Step 8 and phase 4**, the operator's part:
   1. Write `eval/questions.jsonl` from `eval/corpus/outline.txt`.
   2. Set `OPENAI_API_KEY`.
@@ -28,7 +32,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Read the fix-wave re-review. Then, with the operator's go-ahead, push `p2-evaluation`, run `claim-green --feature p2-evaluation` on the pushed tip, and open the PR (the baseline lands later, from phase 4).
+The operator writes `eval/questions.jsonl` from `eval/corpus/outline.txt` (`npm run eval:fetch` first on a new machine) and commits it. Then: `npm run paid:eval -- --dry-run`, and run 1.
 
 ## Blockers
 
@@ -51,6 +55,7 @@ Read the fix-wave re-review. Then, with the operator's go-ahead, push `p2-evalua
 |---|---|---|---|---|---|---|
 | 2026-10-08 (by hand, live) | p2-evaluation | 999bc79 | `npm run eval:fetch` against GitLab and Wayback | PASS | | 48 of 48 files downloaded, every sha256 matched; `outline.txt` written (790 sections). Not covered: a re-fetch after a host changes bytes |
 | 2026-10-08 (by hand, live) | p2-evaluation | 999bc79 | `npm run paid:eval -- --dry-run`, approved at the ask | PASS (expected exit 1) | | It stopped at the first preflight step, naming the missing `eval/questions.jsonl`; no paid call. Not covered: every later preflight step against Supabase and OpenAI (needs the set and the key) |
+| 2026-10-08T12:46:44.454Z | p2-evaluation | 3f765ba0 | `npm run check:all` | PASS | 89.9 s | phase 4: the operator's evaluation set, the paid runs (run 1, calibration, baseline) against real OpenAI and Supabase; the preflight past its first step against live services; CI on Linux |
 
 ## Port ledger
 
