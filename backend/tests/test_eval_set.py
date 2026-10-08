@@ -243,8 +243,21 @@ def committed(path, writer):
 
 
 def test_committed_set_is_valid():
-    path = committed(dataset.QUESTIONS, "the operator writes it by hand (brief decision 10)")
+    path = committed(dataset.QUESTIONS, "it is drafted and reviewed as decision 0004 describes")
     assert dataset.question_problems(dataset.read_jsonl(path)) == []
+
+
+def test_committed_labels_resolve_in_the_fetched_corpus():
+    """Locally, after npm run eval:fetch, every label names a real section; CI has no corpus, so this skips there."""
+    from loreos.evaluation import fetch, labels, run
+
+    path = committed(dataset.QUESTIONS, "it is drafted and reviewed as decision 0004 describes")
+    manifest = dataset.read_manifest(dataset.MANIFEST)
+    if fetch.corpus_problems(manifest, dataset.CORPUS_DIR):
+        pytest.skip("the corpus is not fetched here; run npm run eval:fetch to check the labels")
+    entries, problems = fetch.corpus_outline(run.load_corpus(manifest))
+    assert problems == []
+    assert labels.label_problems(dataset.read_jsonl(path), entries) == []
 
 
 def test_committed_calibration_is_valid():

@@ -6,7 +6,7 @@ LoreOS scores its retrieval and its answers against questions a person wrote. Th
 |---|---|---|
 | `corpus.json` | The 48 corpus files: URL, sha256 and source attribution | by hand, [decision 0003](../docs/decisions/0003-evaluation-corpus-and-judge.md) |
 | `corpus/` | The downloaded files and `outline.txt` (git-ignored) | `npm run eval:fetch` |
-| `questions.jsonl` | The evaluation set: 60 to 100 questions, about 15 unanswerable | the operator, by hand |
+| `questions.jsonl` | The evaluation set: 60 to 100 questions, about 15 unanswerable | drafted by Claude, each label and answer checked ([decision 0004](../docs/decisions/0004-evaluation-set-drafted-by-claude.md)) |
 | `judge_calibration.jsonl` | 30 answers graded by hand, to measure the judge | `npm run eval:calibration-draft`, then the operator grades |
 | `results/` | One JSON file per committed run | `npm run paid:eval` only, never by hand |
 
@@ -18,9 +18,9 @@ npm run eval:fetch
 
 This downloads every file in `corpus.json` into `corpus/`, checks each sha256, and writes `corpus/outline.txt`. The outline lists every heading path (Markdown) and page (PDF), spelled exactly as the parser sees them, with its chunk count. Rerunning it downloads only what is missing or changed.
 
-## 2. Write the evaluation set
+## 2. The evaluation set
 
-One JSON object per line in `questions.jsonl`:
+Claude drafted the committed set at the operator's request (decision 0004). Each row's `note` gives the expected answer, so a person can audit any row. To add or replace questions, follow the same format. One JSON object per line in `questions.jsonl`:
 
 ```json
 {"id": "q001", "question": "<a question the corpus answers>", "answerable": true, "sources": [{"file": "handbook/finance/expenses.md", "heading_path": ["<H2 heading>", "<H3 heading>"]}]}

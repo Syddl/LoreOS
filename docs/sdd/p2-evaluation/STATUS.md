@@ -23,7 +23,10 @@ The single carrier of state between sessions. Update it before a session ends; t
 - **Step 12**: a draft PR, at the operator's choice. It is marked ready once the baseline is committed on this branch, and merged with a merge commit so the result's `git_sha` stays on `main`.
 - **Steps 13 and 14**: open until the baseline lands and the PR merges.
 - **Step 8 and phase 4**, the operator's part:
-  1. Write `eval/questions.jsonl` from `eval/corpus/outline.txt`.
+  1. Done: Claude drafted `eval/questions.jsonl` at the operator's request ([decision 0004](../../decisions/0004-evaluation-set-drafted-by-claude.md)).
+     - It holds 81 questions, 15 of them unanswerable.
+     - Five agents drafted it, and two independent fact-checkers reviewed it, with 8 fixes applied.
+     - Every label resolves in the fetched corpus (`test_committed_labels_resolve_in_the_fetched_corpus`).
   2. Set `OPENAI_API_KEY`.
   3. `npm run paid:eval -- --dry-run`.
   4. Run 1 (to scratch).
@@ -32,12 +35,11 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-The operator writes `eval/questions.jsonl` from `eval/corpus/outline.txt` (`npm run eval:fetch` first on a new machine) and commits it. Then: `npm run paid:eval -- --dry-run`, and run 1.
+Once `OPENAI_API_KEY` is set (and `npm run eval:fetch` has run on that machine): `npm run paid:eval -- --dry-run`, then run 1.
 
 ## Blockers
 
 - `OPENAI_API_KEY` is empty in `.env`. It blocks the paid runs (phase 4) and P1's `paid:smoke`, not the build.
-- `eval/questions.jsonl` is not written. Only the operator writes it (brief decision 10).
 
 ## Steps run differently
 
