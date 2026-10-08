@@ -58,6 +58,8 @@ Once `OPENAI_API_KEY` is set (and `npm run eval:fetch` has run on that machine):
 | 2026-10-08 (by hand, live) | p2-evaluation | 999bc79 | `npm run eval:fetch` against GitLab and Wayback | PASS | | 48 of 48 files downloaded, every sha256 matched; `outline.txt` written (790 sections). Not covered: a re-fetch after a host changes bytes |
 | 2026-10-08 (by hand, live) | p2-evaluation | 999bc79 | `npm run paid:eval -- --dry-run`, approved at the ask | PASS (expected exit 1) | | It stopped at the first preflight step, naming the missing `eval/questions.jsonl`; no paid call. Not covered: every later preflight step against Supabase and OpenAI (needs the set and the key) |
 | 2026-10-08T12:46:44.454Z | p2-evaluation | 3f765ba0 | `npm run check:all` | PASS | 89.9 s | phase 4: the operator's evaluation set, the paid runs (run 1, calibration, baseline) against real OpenAI and Supabase; the preflight past its first step against live services; CI on Linux |
+| 2026-10-08 (by hand, live) | p2-evaluation | e2ae8e8 | `npm run paid:eval -- --dry-run` with the committed 81-question set, approved at the ask | PASS (expected exit 1) | | It passed the set, calibration, corpus-hash and label checks against the real corpus, then stopped at the missing `OPENAI_API_KEY`. It stopped with a traceback; `b799710` turns that into a preflight message. No paid call. Not covered: the database, migration and model checks, and the plan (they need the key) |
+| 2026-10-08T14:38:50.296Z | p2-evaluation | b7997100 | `npm run check:all` | PASS | 93.6 s | the paid runs (run 1, calibration, baseline) against real OpenAI and Supabase; the preflight past the key check (no OPENAI_API_KEY yet) |
 
 ## Port ledger
 
