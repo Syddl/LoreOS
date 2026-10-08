@@ -1,16 +1,20 @@
 """eval:fetch against a local HTTP server: a file lands only after its sha256 matches, and a good file is never fetched again."""
 
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
 
 import pytest
 
-from loreos.evaluation.fetch import corpus_problems, fetch
+from loreos.evaluation import dataset, labels
+from loreos.evaluation.fetch import corpus_problems, fetch, main
 from loreos.ingest import sha256
+from pdf import make_pdf
 
 BODY = b"# Handbook\n\nBody text.\n"
 FILE = "handbook/values.md"
+UNREACHABLE = "http://0.0.0.0:9"  # fails at once, as conftest's OPENAI_BASE_URL does
 
 
 @pytest.fixture
@@ -97,6 +101,54 @@ def test_a_path_outside_the_corpus_is_refused_with_no_request(server, tmp_path):
     assert len(problems) == 1 and "../escape.md" in problems[0]
     assert server.requests == []
     assert files_under(tmp_path) == []
+
+
+def test_the_corpus_directory_itself_is_refused_with_no_request(server, tmp_path):
+    corpus = tmp_path / "corpus"
+    problems = fetch(manifest(served(server, ".", BODY)), corpus)
+    assert len(problems) == 1 and problems[0].startswith(".: refused")
+    assert server.requests == []
+    assert files_under(tmp_path) == []
+
+
+@pytest.mark.parametrize("failure", ["http-404", "hash-mismatch", "network"])
+def test_a_present_file_with_the_wrong_bytes_is_removed_when_its_re_fetch_fails(server, tmp_path, failure):
+    (tmp_path / "handbook").mkdir()
+    (tmp_path / FILE).write_bytes(b"stale bytes\n")
+    server.files[f"/{FILE}"] = b"other bytes\n"
+    url = {"http-404": f"{server.base}/gone.md", "hash-mismatch": f"{server.base}/{FILE}", "network": f"{UNREACHABLE}/{FILE}"}[failure]
+    problems = fetch(manifest({"file": FILE, "url": url, "sha256": sha256(BODY)}), tmp_path)
+    assert len(problems) == 1 and problems[0].startswith(f"{FILE}: ")
+    assert files_under(tmp_path) == []
+
+
+def use_dataset(monkeypatch, tmp_path, entries):
+    monkeypatch.setattr(dataset, "MANIFEST", tmp_path / "corpus.json")
+    monkeypatch.setattr(dataset, "CORPUS_DIR", tmp_path / "corpus")
+    dataset.MANIFEST.write_text(json.dumps(manifest(*entries)), encoding="utf-8")
+
+
+def test_main_fetches_every_file_then_writes_the_outline(server, tmp_path, monkeypatch, capsys):
+    corpus = {"handbook/cafe.md": "# Café\n\n## Opening hours\n\nWe open at nine.\n".encode(), "nist/report.pdf": make_pdf(["Page one.", "Page two."])}
+    use_dataset(monkeypatch, tmp_path, [served(server, file, data) for file, data in corpus.items()])
+    assert main() == 0
+    outline = (dataset.CORPUS_DIR / "outline.txt").read_bytes()
+    assert outline == labels.render_outline(labels.outline(corpus)).encode("utf-8")
+    assert b"\r" not in outline and "Café > Opening hours  (chunks: 1)".encode() in outline and b"page 2  (chunks: 1)" in outline
+    assert str(dataset.CORPUS_DIR / "outline.txt") in capsys.readouterr().out
+
+
+def test_main_writes_no_outline_when_a_file_fails_to_fetch(server, tmp_path, monkeypatch):
+    use_dataset(monkeypatch, tmp_path, [served(server, FILE, BODY), {"file": "handbook/gone.md", "url": f"{server.base}/gone.md", "sha256": sha256(BODY)}])
+    assert main() == 1
+    assert not (dataset.CORPUS_DIR / "outline.txt").exists()
+
+
+def test_main_names_a_file_that_cannot_be_parsed_and_writes_no_outline(server, tmp_path, monkeypatch, capsys):
+    use_dataset(monkeypatch, tmp_path, [served(server, FILE, BODY), served(server, "nist/blank.pdf", make_pdf([""]))])
+    assert main() == 1
+    assert "nist/blank.pdf: cannot be parsed (no extractable text" in capsys.readouterr().err
+    assert not (dataset.CORPUS_DIR / "outline.txt").exists()
 
 
 def test_corpus_problems_names_a_missing_and_a_changed_file(tmp_path):
