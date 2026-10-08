@@ -167,6 +167,12 @@ def test_each_check_refuses_and_the_earliest_failure_wins(pf, monkeypatch, first
     assert pf.calls == calls
 
 
+def test_a_missing_key_is_refused_as_a_preflight_message_not_a_traceback(pf):
+    pf.smoke_error = RuntimeError("OPENAI_API_KEY is not set; add it to .env")  # settings raises this, not SystemExit
+    assert refused(pf) == "preflight: OPENAI_API_KEY is not set; add it to .env"
+    assert pf.calls == ["smoke"]
+
+
 def test_a_missing_set_is_refused_naming_it(pf):
     pf.questions = None
     message = refused(pf)

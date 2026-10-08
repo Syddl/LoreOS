@@ -36,7 +36,10 @@ async def preflight(limit: int | None) -> tuple[str, list[str]]:
         _refuse("corpus files that cannot be parsed", problems)
     if problems := labels.label_problems(questions, entries):
         _refuse("labels that match no section of the corpus", problems)
-    await smoke.preflight()  # the database, the migration head, and the key
+    try:
+        await smoke.preflight()  # the database, the migration head, and the key
+    except RuntimeError as e:  # settings raises a missing key or DATABASE_URL as RuntimeError, with its fix
+        raise SystemExit(f"preflight: {e}") from e
     notes = await _check_models()
     if limit is None and not run.tree_clean():
         raise SystemExit("preflight: the git tree is not clean; commit or remove the changes, "
