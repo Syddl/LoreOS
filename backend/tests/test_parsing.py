@@ -84,6 +84,22 @@ def test_heading_text_drops_anchor_and_html_tags(line, title):
     assert parse("a.md", f"{line}\n\nbody\n".encode()) == [Section([title], None, "body")]
 
 
+@pytest.mark.parametrize(
+    ("line", "title"),
+    [
+        ("## foo ##   ", "foo"),
+        ("## foo\t#", "foo"),
+        ("## foo#", "foo#"),
+        ("## foo ## bar", "foo ## bar"),
+        ("## foo # #", "foo #"),
+        ("### ###", ""),
+        ("#\t", ""),
+    ],
+)
+def test_closing_hashes_follow_commonmark(line, title):
+    assert parse("a.md", f"{line}\n\nbody\n".encode()) == [Section([title], None, "body")]
+
+
 def test_cleaned_headings_nest_into_a_clean_path():
     text = '## Teams {#teams}\n\n### <i class="fas fa-tasks"></i>Compliance\n\nbody\n'
     assert parse("a.md", text.encode()) == [Section(["Teams", "Compliance"], None, "body")]
@@ -91,8 +107,8 @@ def test_cleaned_headings_nest_into_a_clean_path():
 
 @pytest.mark.parametrize(
     "title",
-    [" " * 200_000 + "x", "{#" * 100_000, "<" * 200_000],
-    ids=["spaces", "anchor-openers", "tag-openers"],
+    [" " * 200_000 + "x", "{#" * 100_000, "<" * 200_000, "a" + " " * 200_000 + "b"],
+    ids=["spaces", "anchor-openers", "tag-openers", "interior-spaces"],
 )
 def test_hostile_heading_parses_in_linear_time(title):
     start = time.perf_counter()
