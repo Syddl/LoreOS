@@ -82,6 +82,8 @@ def test_markdown_crlf_and_bom():
         ("## </b>Title", "Title"),
         ("## x < 5 and y > 3", "x < 5 and y > 3"),
         ("## Values <= 10 and >= 5", "Values <= 10 and >= 5"),
+        ("## a <!-- note --> b", "a  b"),
+        ("## Title {#id} ##", "Title"),
     ],
 )
 def test_heading_text_drops_anchor_and_html_tags(line, title):
