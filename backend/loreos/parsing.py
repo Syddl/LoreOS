@@ -12,6 +12,8 @@ KINDS = {".md": "md", ".markdown": "md", ".txt": "txt", ".pdf": "pdf"}
 FRONT_MATTER = re.compile(r"\A---\n.*?\n(?:---|\.\.\.)(?:\n|\Z)", re.S)
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 HEADING = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
+HTML_TAG = re.compile(r"<[^>]+>")
+ANCHOR = re.compile(r"\{#[^}]*\}\s*$")
 
 
 @dataclass
@@ -81,11 +83,16 @@ def _markdown(text: str) -> list[Section]:
             level = len(m[1])
             while stack and stack[-1][0] >= level:
                 stack.pop()
-            stack.append((level, (m[2] or "").strip()))
+            stack.append((level, _heading_title(m[2] or "")))
             continue
         lines.append(line)
     flush()
     return sections
+
+
+def _heading_title(text: str) -> str:
+    """The heading as a reader sees it: no HTML tags, no trailing {#id} attribute block."""
+    return ANCHOR.sub("", HTML_TAG.sub("", text)).strip()
 
 
 def _pdf(data: bytes) -> list[Section]:

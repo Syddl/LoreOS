@@ -64,6 +64,29 @@ def test_markdown_crlf_and_bom():
     assert sections == [Section(["One"], None, "body")]
 
 
+@pytest.mark.parametrize(
+    ("line", "title"),
+    [
+        ("## Title {#id}", "Title"),
+        ("## Collaboration{#collab}", "Collaboration"),
+        ("## 🤝 Collaboration{#collaboration}", "🤝 Collaboration"),
+        ("#### Traveling with 1Password{#travel-mode}", "Traveling with 1Password"),
+        ('## <i class="fas"></i>Compliance', "Compliance"),
+        ('## <i class="fas fa-tasks fa-fw color-orange font-awesome"></i>Compliance', "Compliance"),
+        ("## Use {braces} here", "Use {braces} here"),
+        ("## Ends in {braces}", "Ends in {braces}"),
+        ("## {#only-an-anchor}", ""),
+    ],
+)
+def test_heading_text_drops_anchor_and_html_tags(line, title):
+    assert parse("a.md", f"{line}\n\nbody\n".encode()) == [Section([title], None, "body")]
+
+
+def test_cleaned_headings_nest_into_a_clean_path():
+    text = '## Teams {#teams}\n\n### <i class="fas fa-tasks"></i>Compliance\n\nbody\n'
+    assert parse("a.md", text.encode()) == [Section(["Teams", "Compliance"], None, "body")]
+
+
 def test_txt_is_one_section():
     assert parse("notes.txt", b"line one\n\nline two\n") == [Section([], None, "line one\n\nline two")]
 
