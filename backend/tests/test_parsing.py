@@ -78,6 +78,10 @@ def test_markdown_crlf_and_bom():
         ("## Use {braces} here", "Use {braces} here"),
         ("## Ends in {braces}", "Ends in {braces}"),
         ("## {#only-an-anchor}", ""),
+        ('## <i class="x"></i>Title', "Title"),
+        ("## </b>Title", "Title"),
+        ("## x < 5 and y > 3", "x < 5 and y > 3"),
+        ("## Values <= 10 and >= 5", "Values <= 10 and >= 5"),
     ],
 )
 def test_heading_text_drops_anchor_and_html_tags(line, title):
@@ -107,8 +111,8 @@ def test_cleaned_headings_nest_into_a_clean_path():
 
 @pytest.mark.parametrize(
     "title",
-    [" " * 200_000 + "x", "{#" * 100_000, "<" * 200_000, "a" + " " * 200_000 + "b"],
-    ids=["spaces", "anchor-openers", "tag-openers", "interior-spaces"],
+    [" " * 200_000 + "x", "{#" * 100_000, "<" * 200_000, "<a" * 100_000, "a" + " " * 200_000 + "b"],
+    ids=["spaces", "anchor-openers", "tag-openers", "tag-name-openers", "interior-spaces"],
 )
 def test_hostile_heading_parses_in_linear_time(title):
     start = time.perf_counter()

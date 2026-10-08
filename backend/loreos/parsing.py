@@ -12,7 +12,8 @@ KINDS = {".md": "md", ".markdown": "md", ".txt": "txt", ".pdf": "pdf"}
 FRONT_MATTER = re.compile(r"\A---\n.*?\n(?:---|\.\.\.)(?:\n|\Z)", re.S)
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 HEADING = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*))?$")  # closing #s go in _heading_title: a regex is quadratic on spaces
-HTML_TAG = re.compile(r"<[^<>]+>")  # stops at the next "<", so a line of "<" is scanned once, not quadratically
+# Only a tag or comment opener, so "x < 5 and y > 3" stays. It stops at the next "<", so a line of "<" is scanned once.
+HTML_TAG = re.compile(r"<(?:/?[A-Za-z]|!--)[^<>]*>")
 
 
 @dataclass
