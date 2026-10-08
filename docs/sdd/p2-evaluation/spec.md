@@ -12,7 +12,7 @@ Kill switch: none. Offline tooling, plus one parser fix that changes heading tex
 
 | Interface | Kind | Owner file | Contract |
 |---|---|---|---|
-| Corpus manifest | file format | `eval/corpus.json` | `{sources: [{name, home, license, attribution}], files: [{file, url, sha256}]}`. `file` is the path under `eval/corpus/`, and the document's filename in the evaluation workspace. Handbook URLs pin one commit. |
+| Corpus manifest | file format | `eval/corpus.json` | `{sources: [{name, home, license, attribution, files}], files: [{file, url, sha256}]}`. `file` is the path under `eval/corpus/`, and the document's filename in the evaluation workspace. A source's `files` is the path prefix it covers, and every file falls under exactly one source. Handbook URLs pin one commit; PDF URLs are Wayback `id_` snapshots, because NIST replaces bytes behind the same URL. |
 | Corpus | directory | `eval/corpus/` (git-ignored) | Written by `eval:fetch`; never committed. Holds `outline.txt`: every file's heading paths or pages, spelled as labels must spell them, with the chunk count of each. |
 | Evaluation set | file format | `eval/questions.jsonl` | One object per line: `{id, question, answerable, sources: [...], note?}`. A Markdown source is `{file, heading_path: [...]}` with a non-empty path; a PDF source is `{file, page}`, the 1-based physical page. Unanswerable rows have `sources: []`. |
 | Judge calibration | file format | `eval/judge_calibration.jsonl` | 30 rows `{id, question, answer, passages: [{n, source, text}], human: "faithful" \| "unfaithful"}`. `passages` are the cited passages with their original `[n]` numbers, the same input the judge gets in a run. |

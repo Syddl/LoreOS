@@ -15,6 +15,9 @@ Implements [spec.md](spec.md). Sizing: all fourteen lifecycle steps, since `paid
   - Handbook: `gitlab.com/gitlab-com/content-sites/handbook`, commit `8d0947598af36ea1a8d534028f103f8277976716`. Its content is CC BY-SA 4.0. 44 pages, about 129k tokens, all hashed.
   - Raw URLs `https://gitlab.com/gitlab-com/content-sites/handbook/-/raw/<sha>/content/<path>` return 200. A missing file returns 404 with an HTML body.
   - Ten headings in the chosen pages carry `{#id}`, three of them with no space before it; three carry `<i>` tags.
+  - PDFs: NIST CSF 2.0 (32 pages), NIST AI RMF 1.0 (48), NIST SP 800-88r2 (48) and OSHA 3885 (40). All are US government works and extract cleanly with pypdf, with no empty page.
+    - NIST serves new bytes behind the same URL, so the manifest uses Wayback `id_` snapshots. Each snapshot was verified byte-identical, and urllib's default User-Agent works there and on GitLab.
+    - Labels use physical pages. The printed folio is offset by 4 to 9 pages.
   - OpenAI: `gpt-6.1-sol` costs $2 / $10 per 1M input / output tokens. `reasoning_effort` `low` is supported, and `none` is rejected. Chat usage is `usage.prompt_tokens` / `usage.completion_tokens`, the latter including reasoning; `usage` can be `None`. Embeddings usage is `usage.prompt_tokens`. `seed` is deprecated.
 - Operator decisions:
   - Keep the handbook and license the quoting files under `eval/` CC BY-SA 4.0.
@@ -60,7 +63,7 @@ Implements [spec.md](spec.md). Sizing: all fourteen lifecycle steps, since `paid
 
 | From | To | Handoff |
 |---|---|---|
-| 1.1 | 2.1, 3.1, 3.2 | `dataset.{EVAL_DIR, QUESTIONS, CALIBRATION, MANIFEST, CORPUS_DIR, RESULTS_DIR, SCRATCH_DIR}`; `read_jsonl(path) -> list[dict]` (raises `DatasetError` naming path and line); `question_problems(rows) -> list[str]`; `calibration_problems(rows) -> list[str]`; `read_manifest(path) -> dict`; `manifest_problems(manifest) -> list[str]`; `text_hash(path) -> str` (sha256 after CRLF to LF); `corpus_hash(manifest) -> str` (sha256 over sorted `file\tsha256\n` lines) |
+| 1.1 | 2.1, 3.1, 3.2 | `dataset.{EVAL_DIR, QUESTIONS, CALIBRATION, MANIFEST, CORPUS_DIR, RESULTS_DIR, SCRATCH_DIR}`; `read_jsonl(path) -> list[dict]` (raises `DatasetError` naming path and line); `question_problems(rows) -> list[str]`; `calibration_problems(rows) -> list[str]`; `read_manifest(path) -> dict`; `manifest_problems(manifest) -> list[str]` (each file: a relative path with forward slashes and no `..`, an http(s) url and a 64-hex sha256, unique by file, and covered by exactly one `sources[].files` prefix); `text_hash(path) -> str` (sha256 after CRLF to LF); `corpus_hash(manifest) -> str` (sha256 over sorted `file\tsha256\n` lines) |
 | 1.2 | 2.1, 3.1 | `is_relevant(hit, source) -> bool` (hit: any object with `filename`, `heading_path`, `page`); `matched_sources(hit, sources) -> list[int]`; `OutlineEntry(file, heading_path, page, chunks)`; `outline(corpus: dict[str, bytes]) -> list[OutlineEntry]`; `label_problems(questions, entries) -> list[str]` (names the closest heading); `broad_labels(questions, entries, max_chunks=3) -> list[str]`; `render_outline(entries) -> str` |
 | 1.3 | 2.1 | `summarize(rows, calibration) -> {"metrics", "judge_confusion", "latency_ms", "counts"}` over the row shape below; `percentile(values, q) -> float \| None` (nearest rank) |
 | 1.4 | 3.1 | `fetch(manifest, corpus_dir) -> list[str]` (problems; downloads with `urllib.request`); `main() -> int` |
