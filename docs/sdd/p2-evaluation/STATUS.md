@@ -19,9 +19,9 @@ The single carrier of state between sessions. Update it before a session ends; t
 - **Step 10**: done.
   - The fixes are in `dc95b19`, `3378a9e`, `863f2aa`, `bbb8051` and `66121ab`.
   - Their re-review said merge ([reviews/branch.md](reviews/branch.md)).
-- **Step 11**: claim-green PASS on the pushed tip `3f765ba0`.
-- **Step 12**: a draft PR, at the operator's choice. It is marked ready once the baseline is committed on this branch, and merged with a merge commit so the result's `git_sha` stays on `main`.
-- **Steps 13 and 14**: open until the baseline lands and the PR merges.
+- **Step 11**: claim-green PASS on the pushed tips `3f765ba0` and `b7997100`.
+- **Step 12**: done. PR #3 (the tooling and the evaluation set) merged into main as `faa149c`, a merge commit, with CI green. The operator chose to merge before the baseline, because OpenAI is not reachable yet.
+- **Steps 13 and 14**: open until the baseline lands from the `p2-baseline` branch. Merge it with a merge commit, so the result's `git_sha` stays on `main`.
 - **Step 8 and phase 4**, the operator's part:
   1. Done: Claude drafted `eval/questions.jsonl` at the operator's request ([decision 0004](../../decisions/0004-evaluation-set-drafted-by-claude.md)).
      - It holds 81 questions, 15 of them unanswerable.
@@ -35,7 +35,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Once `OPENAI_API_KEY` is set (and `npm run eval:fetch` has run on that machine): `npm run paid:eval -- --dry-run`, then run 1.
+On branch `p2-baseline`, once `OPENAI_API_KEY` is set (and `npm run eval:fetch` has run on that machine): `npm run paid:eval -- --dry-run`, then run 1.
 
 ## Blockers
 
@@ -65,4 +65,4 @@ Once `OPENAI_API_KEY` is set (and `npm run eval:fetch` has run on that machine):
 
 | Branch | Status | Reference |
 |---|---|---|
-| main | required | until the P2 PR merges |
+| main | done for the tooling and the set; the baseline is required | `faa149c` (PR #3, merge commit). The baseline follows from `p2-baseline` |

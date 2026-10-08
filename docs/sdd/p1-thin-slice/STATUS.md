@@ -9,10 +9,9 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Open tasks
 
-- Step 9: four review rounds ([reviews/](reviews/)). The last re-review said merge; its minors and the automated security findings are fixed in `fix(guard): exempt only the whole canonical paid:smoke free form`. PR #2 is open against main.
-- CI on the PR: green on `0aad5de` (setup-uv pinned). It must be green again on the final tip (row 18).
-- `npm run paid:smoke` (row 16): needs `OPENAI_API_KEY` and the operator's yes at the ask prompt; its verification row is added by hand.
-- Steps 13 to 14: ledger rows, close.
+- Steps 9 to 12: done. PR #2 merged into main as `33f1564`, a merge commit, with CI green. `npm run db:migrate` ran live on Supabase (ledger row by hand).
+- `npm run paid:smoke` (row 16): needs `OPENAI_API_KEY` and the operator's yes at the ask prompt. Its verification row is added by hand.
+- Step 14, close: after `paid:smoke` passes.
 
 ## Next step
 
@@ -41,4 +40,4 @@ Once `OPENAI_API_KEY` is set: `npm run paid:smoke -- --dry-run` (free preflight;
 
 | Branch | Status | Reference |
 |---|---|---|
-| main | required | until the P1 PR merges |
+| main | done | `33f1564` (PR #2, merge commit) |
