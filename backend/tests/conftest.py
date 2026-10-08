@@ -107,6 +107,23 @@ def fake_draft(monkeypatch):
 
 
 @pytest.fixture
+def fake_judge(monkeypatch):
+    """Replace llm.judge; set .reply to the Verdict it returns or an exception it raises; .calls records each call."""
+    from loreos import llm
+
+    fake = SimpleNamespace(reply=llm.Verdict(rationale="Every claim is supported.", grade="faithful"), calls=[])
+
+    async def judge(question, answer, passages):
+        fake.calls.append((question, answer, passages))
+        if isinstance(fake.reply, BaseException):
+            raise fake.reply
+        return fake.reply
+
+    monkeypatch.setattr(llm, "judge", judge)
+    return fake
+
+
+@pytest.fixture
 def client(clean):
     from fastapi.testclient import TestClient
 

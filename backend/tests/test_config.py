@@ -19,7 +19,7 @@ def test_dev_api_binds_localhost_only():
 
 def test_env_example_lists_exactly_the_keys_settings_reads():
     read = set(re.findall(r'_env\("([A-Z_]+)"\)', Path(settings.__file__).read_text(encoding="utf-8")))
-    assert read == {"DATABASE_URL", "OPENAI_API_KEY", "OPENAI_BASE_URL", "EMBEDDING_MODEL", "ANSWER_MODEL"}
+    assert read == {"DATABASE_URL", "OPENAI_API_KEY", "OPENAI_BASE_URL", "EMBEDDING_MODEL", "ANSWER_MODEL", "JUDGE_MODEL"}
     assert set(env_example()) == read
 
 
@@ -27,3 +27,4 @@ def test_env_example_model_defaults_match_settings():
     example = env_example()
     assert example["EMBEDDING_MODEL"] == settings.DEFAULT_EMBEDDING_MODEL
     assert example["ANSWER_MODEL"] == settings.DEFAULT_ANSWER_MODEL
+    assert example["JUDGE_MODEL"] == settings.DEFAULT_JUDGE_MODEL
