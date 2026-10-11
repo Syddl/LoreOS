@@ -29,7 +29,11 @@ The single carrier of state between sessions. Update it before a session ends; t
   - **1.1** done, `f9146d7`: `ALLOWED_HOSTS`, `startup_problems()`, and argon2-cffi, python-docx, beautifulsoup4, httpx2 and httpcore2. Red first on the exact key set; redproof PASS.
   - **1.2** done, `1db5430`: migration `0002_platform`, the per-checkout non-superuser test database, and every settings key pinned. `check:backend` 344 passed as `testdb_owner`. The redproof (`docx` dropped from the kind check) PASS, which proves the per-session recreate.
   - **1.4** done, `a584ef9`: the guard asks on the worker and on compose `up`, `start`, `restart`, `run` and `watch`, except a testdb-only `up`. check:spend 123/123; redproof PASS, with exactly the 2 interpreter cases red.
-  - **1.3**: in progress, with an implementer in its own worktree.
+  - **1.3** done, `47ce731` (cherry-picked from the implementer's `f112b0c`; report in [tasks/1.3-report.md](tasks/1.3-report.md)): `workspace_session` runs as `loreos_app` with the workspace set; `system_session()`; `verify_rls` with 12 named checks; `test_isolation.py`.
+    - Red first: the unfiltered counts were A + B.
+    - Three redproofs PASS: the role switch, a commit, and a `reset role`.
+    - The implementer found that the plan's `grant testdb_owner to loreos_app` negative makes a membership loop. The plan now revokes first.
+  - **Window A** (phase 1) closed: `check:all` PASS at `47ce731` (ledger).
 - **For P3's spec revision**, which starts from `main`, so it reads these from this branch until P4 merges:
   - decision 0007, for tqdm;
   - the shared-file rules in this spec's Risks;
@@ -37,11 +41,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Finish window A:
-1. Read 1.3's report.
-2. Cherry-pick its commit and run its redproofs.
-3. Run `npm run check:all`.
-4. Start window B: 2.1 to 2.5 by implementers, and 5.1 in the main session.
+Window B: 2.1 to 2.5 by implementers, each in its own worktree, and 5.1, the frontend scaffold, in the main session. The main session runs 2.5's redproof itself, because `smoke.py` matches the spend pattern.
 
 ## Blockers
 
@@ -56,6 +56,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 
 | date | branch | sha | suite | result | duration | not covered |
 |---|---|---|---|---|---|---|
+| 2026-10-11 (by hand, window A) | p4-platform-shell | 47ce731 | `npm run check:all` | PASS | 117 s | hooks 395/395, agent-hooks 7/7, backend 371 passed and 2 skipped, licenses 48/48, spend 123/123. Not covered: Supabase (`db:verify-rls` live, phase 7); CI on Linux; the unpushed tip |
 
 ## Port ledger
 

@@ -412,7 +412,8 @@ GET /api/health                   200 {"status": "ok"} | 503
       - `revoke usage on schema public from loreos_app` **and** `revoke usage on schema public from public`. On testdb `vector` lives in `public`, which grants `USAGE` to PUBLIC, and `has_schema_privilege` counts that grant;
       - for the SET option: create a role, grant `loreos_app` to it `with set false`, `set local role` to it, and `problems()` names the `SET` option.
     - **Expected sets.** Some changes fire more than one check. A superuser has every right, so it trips the superuser and rights checks; owning a table trips the owner and rights checks. Each case therefore asserts an expected **set** of check names, not a single message.
-    - **One more negative**: `grant testdb_owner to loreos_app`. Membership in the owner makes `loreos_app` owner-equivalent and exempt from RLS, and it is expected to trip the rights check.
+    - **One more negative**: `revoke loreos_app from testdb_owner cascade`, then `grant testdb_owner to loreos_app`. Membership in the owner makes `loreos_app` owner-equivalent and exempt from RLS, and it is expected to trip the owner and rights checks.
+      - The revoke comes first because the migration grants `loreos_app` to the owner, and Postgres refuses a membership loop (found in 1.3).
     - **Coverage pin.** `problems()` emits from a fixed registry, `verify_rls.CHECKS` (check name to message). The pin asserts that the parametrised cases together cover every name in `CHECKS` (third review, N2);
   - **source scan**: `system_session(` and `engine()` appear only in `SYSTEM_SESSION_FILES`:
     - `db.py`, `auth.py`, `ratelimit.py`, `worker.py`, `admin.py`, `verify_rls.py`, `smoke.py`;
