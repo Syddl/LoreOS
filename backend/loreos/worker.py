@@ -99,7 +99,10 @@ async def claim() -> Row | None:
 
 async def record_failure(claimed: Row, stage: str, klass: str, error: BaseException) -> None:
     """Write the failure on the row while it still holds this claim's lease; a stale worker writes nothing."""
-    counted = klass != "systemic"  # a systemic failure is the deployment's, so the document keeps its attempts
+    # A systemic failure is the deployment's, so the document keeps its attempts, unless a paid call came first: the
+    # dimension check raises after its first batch, and the store stage runs after the whole embedding. Those count,
+    # so a document stops after MAX_ATTEMPTS bought batches instead of buying one every SYSTEMIC_PAUSE_S.
+    counted = klass != "systemic" or stage == "store" or isinstance(error, llm.EmbeddingDimensionError)
     attempts = claimed.attempts + counted
     if klass == "permanent" or attempts >= MAX_ATTEMPTS:
         status, delay = "failed", None
@@ -135,6 +138,7 @@ async def run_once() -> str | None:
     if claimed.status == "failed":
         return "transient"
     log.info("worker claimed document=%s", claimed.id)
+    count = None
     try:
         async with workspace_session(claimed.workspace_id) as session:
             # A killed or hung worker's row lock is freed within one lease.
@@ -144,8 +148,9 @@ async def run_once() -> str | None:
         await release(claimed)
         log.info("worker released document=%s", claimed.id)
         raise
-    except Exception as e:  # classified below; a StageError carries the stage, anything else failed around the stages
-        stage, error = (e.stage, e.__cause__) if isinstance(e, ingest.StageError) else ("store", e)
+    except Exception as e:  # classified below; a StageError carries the stage, anything else failed around the stages:
+        # before them (the session and the row lock, nothing paid yet) or at the commit after them (store).
+        stage, error = (e.stage, e.__cause__) if isinstance(e, ingest.StageError) else ("lock" if count is None else "store", e)
         klass = classify(error)
         log.warning("worker failed document=%s stage=%s class=%s", claimed.id, stage, klass)
         await record_failure(claimed, stage, klass, error)

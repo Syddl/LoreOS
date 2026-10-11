@@ -4,6 +4,7 @@ Every case runs on fake_embed or a raising embed, so nothing here reaches OpenAI
 """
 
 import asyncio
+import contextlib
 import logging
 from types import SimpleNamespace
 
@@ -154,6 +155,61 @@ def test_a_systemic_failure_leaves_the_document_pending_and_uncounted(clean, mon
     assert (status, attempts) == ("pending", 0)
     assert stored.startswith(f"embed: systemic: {type(error).__name__}: ")
     assert worker.SYSTEMIC_PAUSE_S - 5 < seconds_until_due(doc.id) <= worker.SYSTEMIC_PAUSE_S
+
+
+@contextlib.contextmanager
+def revoked(privilege: str, table: str):
+    """Revoke one of loreos_app's grants, committed so the worker's own session sees it, and grant it back after."""
+    sql(f"revoke {privilege} on {table} from loreos_app")
+    try:
+        yield
+    finally:
+        sql(f"grant {privilege} on {table} to loreos_app")
+
+
+def test_a_dimension_error_after_its_paid_batch_is_counted_so_the_document_fails_at_the_third(clean, monkeypatch, worker_log):
+    doc = enqueue()
+    calls = []
+
+    async def embed(texts):
+        calls.append(texts)  # the batch is paid for before the dimension check raises
+        raise llm.EmbeddingDimensionError("3 dimensions")
+
+    monkeypatch.setattr(llm, "embed", embed)
+    for attempts, delay in ((1, 30), (2, 120)):
+        assert drain() == ["systemic"]
+        assert state(doc.id)[:2] == ("pending", attempts)
+        assert delay - 5 < seconds_until_due(doc.id) <= delay
+        make_due(doc.id)
+    assert drain() == ["systemic"]
+    status, attempts, error = state(doc.id)
+    assert (status, attempts) == ("failed", 3)
+    assert error.startswith("embed: systemic: EmbeddingDimensionError: ")
+    make_due(doc.id)
+    assert drain() == []
+    assert len(calls) == 3
+    assert logged(worker_log).count(f"worker failed document={doc.id} stage=embed class=systemic") == 3
+
+
+def test_a_missing_grant_at_store_after_the_embedding_is_bought_is_counted(clean, fake_embed):
+    doc = enqueue()
+    with revoked("insert", "loreos.chunks"):
+        assert drain() == ["systemic"]
+    status, attempts, error = state(doc.id)
+    assert (status, attempts) == ("pending", 1)
+    assert error.startswith("store: systemic: ProgrammingError: ") and "permission denied for table chunks" in error
+    assert 25 < seconds_until_due(doc.id) <= 30
+    assert fake_embed != []
+
+
+def test_a_missing_grant_at_the_row_lock_before_any_spend_stays_uncounted(clean, fake_embed):
+    doc = enqueue()
+    with revoked("update", "loreos.documents"):  # select ... for update needs it
+        assert drain() == ["systemic"]
+    status, attempts, error = state(doc.id)
+    assert (status, attempts) == ("pending", 0)
+    assert error.startswith("lock: systemic: ProgrammingError: ") and "permission denied for table documents" in error
+    assert fake_embed == []
 
 
 class Stop(BaseException):
