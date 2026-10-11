@@ -1,22 +1,27 @@
-"""Passwords, session tokens, API keys and the current_member, require_owner and current_user dependencies.
+"""Passwords, session tokens, API keys, the current_member, require_owner and current_user dependencies, and the
+signup, login, logout, me and invite routes.
 
-The dependencies run in a small FastAPI app built here; the real routes arrive with phase 4.
+The dependencies run in a small FastAPI app built here; the routes run on the real app.
 """
 
 import asyncio
 import hashlib
 import re
+import secrets
+from datetime import UTC, datetime, timedelta
 from http.cookies import SimpleCookie
 from typing import Annotated
 
 import argon2
+import httpx2
 import pytest
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.testclient import TestClient
 
-from conftest import ORIGIN, app_client, sql
-from loreos import auth
+from conftest import ORIGIN, app_client, make_user, sql
+from loreos import auth, main, ratelimit
 from loreos.db import system_session
+from loreos.workspaces import DEFAULT_WORKSPACE_ID
 
 PASSWORD = "correct horse battery"
 
@@ -297,3 +302,270 @@ def test_a_bearer_write_needs_no_origin(method, authorization):
 
 def test_a_get_needs_no_origin(db):
     assert app_client().get("/api/health").status_code == 200
+
+
+# The routes (task 4.2)
+
+SIGNUP = "/api/auth/signup"
+LOGIN = "/api/auth/login"
+LOGOUT = "/api/auth/logout"
+ME = "/api/me"
+ACCEPT = "/api/invites/accept"
+WRONG = "wrong password!!"
+NEW = {"email": "new@example.com", "password": PASSWORD}
+
+
+def asgi_client() -> httpx2.AsyncClient:
+    """The real app over an ASGI transport, at ORIGIN, so requests gathered on one loop run truly at once."""
+    return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=main.app), base_url=ORIGIN, headers={"origin": ORIGIN})
+
+
+def login(client, email: str, password: str = WRONG):
+    return client.post(LOGIN, json={"email": email, "password": password})
+
+
+def invite(workspace_id=DEFAULT_WORKSPACE_ID, expires=timedelta(days=7)) -> str:
+    """An unused invite to workspace_id, stored as 4.3 stores it; its token."""
+    token = secrets.token_urlsafe(32)
+    sql(
+        "insert into loreos.invites (token_hash, workspace_id, expires_at) values (:h, :w, :x)",
+        h=sha256(token),
+        w=workspace_id,
+        x=datetime.now(UTC) + expires,
+    )
+    return token
+
+
+def accept(client, token: str, **account):
+    return client.post(ACCEPT, json={"token": token, **account})
+
+
+def users() -> int:
+    return sql("select count(*) from loreos.users")[0][0]
+
+
+# Signup
+
+
+@pytest.mark.parametrize(
+    "email, password, named",
+    [("ann@example.com", "a" * 11, "12"), ("not-an-email", PASSWORD, "email"), ("a" * 320 + "@example.com", PASSWORD, "email")],
+    ids=["short password", "no at sign", "email too long"],
+)
+def test_a_bad_signup_gets_422_and_stores_no_user(client, email, password, named):
+    response = client.post(SIGNUP, json={"email": email, "password": password})
+    assert response.status_code == 422
+    assert named in response.json()["detail"]
+    assert users() == 0
+
+
+@pytest.mark.parametrize("name, expected", [({"workspace_name": "Acme"}, "Acme"), ({}, "My workspace")])
+def test_the_first_signup_owns_a_new_workspace_and_default_and_never_an_eval_one(client, name, expected):
+    sql("insert into loreos.workspaces (name) values ('eval-0123456789ab')")
+    response = client.post(SIGNUP, json={"email": " Ann@Example.com", "password": PASSWORD, **name})
+    assert response.status_code == 201
+    me = response.json()
+    assert me["user"]["email"] == "ann@example.com"
+    assert [(w["name"], w["role"]) for w in me["workspaces"]] == [(expected, "owner"), ("Default", "owner")]
+    assert me["workspaces"][1]["id"] == str(DEFAULT_WORKSPACE_ID)
+    assert client.get(ME).json() == me  # logged in by the cookie the signup set
+
+
+def test_a_second_signup_gets_403(client):
+    assert client.post(SIGNUP, json={"email": "ann@example.com", "password": PASSWORD}).status_code == 201
+    response = app_client(origin=ORIGIN).post(SIGNUP, json={"email": "bob@example.com", "password": PASSWORD})
+    assert response.status_code == 403
+    assert sql("select email from loreos.users") == [("ann@example.com",)]
+
+
+def test_two_concurrent_first_signups_give_one_201_and_one_403(clean, monkeypatch):
+    real = auth.create_user
+
+    async def slow(conn, email, password):
+        await asyncio.sleep(0.3)  # without the lock, both requests are past the "no user yet" check by now
+        return await real(conn, email, password)
+
+    monkeypatch.setattr(auth, "create_user", slow)
+
+    async def go():
+        async with asgi_client() as c:
+            bodies = [{"email": f"{name}@example.com", "password": PASSWORD} for name in ("ann", "bob")]
+            return await asyncio.gather(*(c.post(SIGNUP, json=body) for body in bodies))
+
+    assert sorted(r.status_code for r in asyncio.run(go())) == [201, 403]
+    assert users() == 1
+
+
+# Cookie and session
+
+
+@pytest.mark.parametrize("scheme", ["http", "https"])
+def test_login_sets_the_session_cookie_with_its_flags(clean, scheme):
+    make_user("ann@example.com")
+    base = f"{scheme}://127.0.0.1:8000"
+    response = login(TestClient(main.app, base_url=base, headers={"origin": base}), "ann@example.com", PASSWORD)
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "ann@example.com"
+    morsel = SimpleCookie(response.headers["set-cookie"])[auth.SESSION_COOKIE]
+    assert morsel["httponly"] is True and morsel["samesite"].lower() == "lax" and morsel["path"] == "/"
+    assert bool(morsel["secure"]) is (scheme == "https")
+    assert (sha256(morsel.value),) in sql("select id from loreos.sessions")
+
+
+def test_logout_deletes_the_session_row_and_clears_the_cookie(owner):
+    token = owner.client.cookies.get(auth.SESSION_COOKIE)
+    assert owner.client.get(ME).json() == {
+        "user": {"id": str(owner.id), "email": owner.email},
+        "workspaces": [{"id": str(DEFAULT_WORKSPACE_ID), "name": "Default", "role": "owner"}],
+    }
+    # a Bearer request skips the Origin rule, so logout must refuse one rather than read its cookie
+    assert owner.client.post(LOGOUT, headers={"authorization": "Bearer x"}).status_code == 403
+    response = owner.client.post(LOGOUT)
+    assert response.status_code == 204
+    assert SimpleCookie(response.headers["set-cookie"])[auth.SESSION_COOKIE]["max-age"] == "0"
+    assert sql("select count(*) from loreos.sessions")[0][0] == 0
+    assert owner.client.get(ME).status_code == 401
+    stale = app_client()
+    stale.cookies.set(auth.SESSION_COOKIE, token)
+    assert stale.get(ME).status_code == 401
+
+
+# Login rate limit
+
+
+def test_the_sixth_failure_for_one_email_gets_429_with_retry_after(client):
+    make_user("ann@example.com")
+    assert [login(client, "ann@example.com").status_code for _ in range(5)] == [401] * 5
+    response = login(client, "ann@example.com")
+    assert response.status_code == 429
+    assert 0 < int(response.headers["retry-after"]) <= 900
+    assert login(client, "ann@example.com", PASSWORD).status_code == 429  # refused before verifying
+
+
+def test_twenty_concurrent_guesses_verify_at_most_five_times(clean, monkeypatch):
+    make_user("ann@example.com")
+    n = 20
+    state = {"calls": 0, "settled": 0}
+
+    async def go():
+        everyone = asyncio.Event()
+
+        def settle():
+            state["settled"] += 1
+            if state["settled"] >= n:
+                everyone.set()
+
+        async def spy(password_hash, password):
+            state["calls"] += 1
+            settle()
+            await asyncio.wait_for(everyone.wait(), 5)  # hold each verification until every request is accounted for
+            return False
+
+        async def guess(c):
+            response = await c.post(LOGIN, json={"email": "ann@example.com", "password": WRONG})
+            settle()  # counts only a request that never reached the seam: one that did is answered after the event
+            return response.status_code
+
+        monkeypatch.setattr(auth, "_verify", spy)
+        async with asgi_client() as c:
+            return await asyncio.gather(*(guess(c) for _ in range(n)))
+
+    statuses = asyncio.run(go())
+    assert state["calls"] <= 5
+    assert sorted(statuses) == [401] * 5 + [429] * 15
+
+
+def test_case_variants_of_one_email_share_a_bucket(client):
+    make_user("ann@example.com")
+    variants = ["Ann@Example.com", "ann@example.com", "ANN@EXAMPLE.COM", " ann@Example.com", "ann@example.COM "]
+    assert [login(client, email).status_code for email in variants] == [401] * 5
+    assert login(client, "aNN@example.com").status_code == 429
+
+
+def test_twenty_failures_across_emails_from_one_client_then_429(client):
+    assert [login(client, f"user{n}@example.com").status_code for n in range(20)] == [401] * 20
+    response = login(client, "user20@example.com")
+    assert response.status_code == 429
+    assert int(response.headers["retry-after"]) > 0
+
+
+@pytest.mark.parametrize("refunds", [True, False])
+def test_a_success_refunds_its_reservation(client, monkeypatch, refunds):
+    make_user("ann@example.com")
+    if not refunds:
+
+        async def keep(bucket, window_start):
+            pass
+
+        monkeypatch.setattr(ratelimit, "refund", keep)
+    assert [login(client, "ann@example.com").status_code for _ in range(4)] == [401] * 4
+    assert login(client, "ann@example.com", PASSWORD).status_code == 200
+    if refunds:
+        assert sql("select count from loreos.rate_limits where bucket = 'login:email:ann@example.com'") == [(4,)]
+        assert login(client, "ann@example.com").status_code == 401  # count 5 of 5
+    assert login(client, "ann@example.com").status_code == 429
+
+
+def test_an_unknown_email_and_a_wrong_password_get_the_same_answer(client):
+    make_user("ann@example.com")
+    unknown = login(client, "nobody@example.com")
+    wrong = login(client, "ann@example.com")
+    assert unknown.status_code == wrong.status_code == 401
+    assert unknown.json() == wrong.json()
+
+
+# Invites
+
+
+def test_an_invite_is_single_use(client):
+    token = invite()
+    first = accept(client, token, **NEW)
+    assert first.status_code == 201
+    assert first.json()["user"]["email"] == "new@example.com"
+    assert [(w["id"], w["role"]) for w in first.json()["workspaces"]] == [(str(DEFAULT_WORKSPACE_ID), "member")]
+    assert client.get(ME).json() == first.json()  # logged in by the cookie it set
+    assert accept(app_client(origin=ORIGIN), token, email="other@example.com", password=PASSWORD).status_code == 404
+    assert users() == 1
+
+
+def test_an_expired_or_unknown_invite_gets_404(client):
+    assert accept(client, invite(expires=timedelta(days=-1)), **NEW).status_code == 404
+    assert accept(client, "not-a-token", **NEW).status_code == 404
+    assert users() == 0
+
+
+@pytest.mark.parametrize(
+    "account, status",
+    [
+        ({"email": "Taken@Example.com", "password": PASSWORD}, 409),
+        ({"email": "new@example.com", "password": "a" * 11}, 422),
+        ({}, 422),
+    ],
+)
+def test_a_refused_account_leaves_the_invite_usable(client, account, status):
+    make_user("taken@example.com")
+    token = invite()
+    response = accept(client, token, **account)
+    assert response.status_code == status
+    assert isinstance(response.json()["detail"], str)
+    assert sql("select used_at from loreos.invites") == [(None,)]
+    assert accept(client, token, **NEW).status_code == 201
+
+
+def test_a_stale_session_cookie_accepts_as_logged_out(client):
+    client.cookies.set(auth.SESSION_COOKIE, "stale")
+    assert accept(client, invite(), **NEW).status_code == 201
+
+
+def test_a_logged_in_accept_adds_the_membership_once(member):
+    other = sql("insert into loreos.workspaces (name) values ('Other') returning id")[0][0]
+    token = invite(other)
+    assert member.client.post(ACCEPT, json={"token": token}, headers={"authorization": "Bearer x"}).status_code == 403
+    response = accept(member.client, token)
+    assert response.status_code == 200
+    assert {(w["name"], w["role"]) for w in response.json()["workspaces"]} == {("Default", "member"), ("Other", "member")}
+    assert accept(member.client, invite(other)).status_code == 200  # a second invite to the same workspace changes nothing
+    assert sql("select role from loreos.memberships where user_id = :u and workspace_id = :w", u=member.id, w=other) == [
+        ("member",)
+    ]
+    assert users() == 1
