@@ -69,8 +69,12 @@ Implements [spec.md](spec.md), as revised against P1 and P2. Sizing: this phase 
 
 - **testdb's init is conftest's bootstrap.** The session `db` fixture connects as `postgres` to the `postgres` database. Then it:
   1. creates `testdb_owner` (`LOGIN CREATEROLE BYPASSRLS`) when absent, catching both `duplicate_object` and `unique_violation`;
-  2. **drops and recreates** the test database, with `drop database if exists ... with (force)`, then sets `testdb_owner` as owner and installs `vector` in `public`. Every session therefore migrates from empty, so a changed migration file always reaches the database: this is what lets 1.2's mutation and P3's re-pointed `down_revision` go red.
-     - The name is `loreos_test_` plus the checkout directory name, with every character outside `[a-z0-9_]` replaced by `_`, cut to 63 bytes, and always quoted.
+  2. **drops and recreates** the test database, then sets `testdb_owner` as owner and installs `vector` in `public`. Every session therefore migrates from empty, so a changed migration file always reaches the database: this is what lets 1.2's mutation and P3's re-pointed `down_revision` go red.
+     - **The name** is `loreos_test_` plus the checkout directory name, with every character outside `[a-z0-9_]` replaced by `_`, cut to 63 bytes, and always quoted. The bootstrap asserts the prefix before it drops anything.
+     - **The admin connection** is hard-coded to `postgres@127.0.0.1:54329`, never read from the environment, so it can never point at Supabase. It runs in autocommit, which `DROP` and `CREATE DATABASE` require.
+     - **No `FORCE`.** When another session is connected to this checkout's database, such as a second pytest run in the same checkout, the bootstrap stops, naming the database, rather than killing that session.
+     - **Role drift.** After creating the roles, the bootstrap runs `alter role loreos_app nologin nobypassrls nosuperuser`. Roles are cluster-wide, so a role left wrong by one checkout is reset rather than leaking into the next.
+     - **Removed worktrees** leave their databases behind. testdb runs on tmpfs, so restarting the container clears them.
   3. migrates, then runs every test connected as `testdb_owner`.
   4. **pins every `_env` key** that `settings.py` reads to a test value, so a `.env` in the checkout changes no test. Today these are `ALLOWED_HOSTS` and the model keys.
 
@@ -86,14 +90,22 @@ Implements [spec.md](spec.md), as revised against P1 and P2. Sizing: this phase 
 - **Revision id `0002_platform`** (file `0002_platform_shell.py`), not `0002`. A database at P3's own `0002` then shows up as a second head, which fails loudly, and never passes for P4's revision.
 - **`loreos_app` is created inside `exception when duplicate_object or unique_violation`.** Roles are cluster-wide, and two worktrees can migrate at the same time. Concurrent `create role` statements fail with `unique_violation`, not `duplicate_object`.
 - **The role switch.** `workspace_session` first runs `select set_config('role','loreos_app',true), set_config('app.workspace_id',:w,true)`.
-  - Both settings are transaction-local. So no code commits inside a session: sessions commit only when their context exits. A source scan in 1.3 pins this (no `.commit(` under `backend/loreos/`).
+  - Both settings are transaction-local. So no code ends the transaction inside a session: sessions commit only when their context exits.
+    - A `commit`, a `rollback` other than a savepoint's, or a `reset role` or `set role` would drop the switch, and later statements would run as the owner, bypassing RLS.
+    - A source scan in 1.3 pins this.
   - Each of `documents` and `chunks` gets one policy, `workspace_isolation`: `for all to loreos_app using (...) with check (...)`.
   - RLS is enabled but not forced. The table owner bypasses it, in `system_session` and in `sql()`, as behaviour 2 expects.
-- **Connection cap: uvicorn's, not ours.**
-  - The image runs uvicorn with `--limit-concurrency 5`, so a request past that gets 503 from uvicorn itself. There is no in-process semaphore, which removes the deadlock that a nested session would cause while waiting on one.
-  - A request opens at most two sessions, one after the other. So the api peaks at 10 connections; the worker, at one document at a time, at 2. That is 12. `migrate` runs and exits before both start.
-  - Session mode holds one server connection per client. The live row reads the project's pool size and records it against 12. If the pool is smaller, the limit drops.
-  - Planning review finding 2 replaced the first draft's `db.MAX_CONNECTIONS` semaphore.
+- **No connection cap in v1.**
+  - The api opens one connection per session, one session after another within a request. The worker handles one document at a time.
+  - A burst of concurrent requests beyond Supavisor's client limit gets connection errors: a 500 for those requests, which is not data loss.
+  - Both caps tried in review failed:
+    - a `db.MAX_CONNECTIONS` semaphore deadlocks on nested sessions (first review, finding 2);
+    - uvicorn's `--limit-concurrency` counts idle keep-alive sockets, so two browser tabs polling the documents list get plain-text 503s (re-review, F1).
+
+    A correct cap needs an acquire timeout, a JSON 503 and a guard against nested sessions. That is more code than a learning build's traffic justifies.
+  - 6.2 adds a KNOWN-GAPS row. It triggers when users report 500s under load, or when a deployment expects more concurrent users than the pooler's client limit.
+  - The live row records the pool size.
+  - **Row-lock waits.** Deleting or re-queueing a document can wait on the worker's row lock for minutes. So both run with `set local lock_timeout = '2s'`, and a timeout answers 409 "the document is being processed; try again shortly".
 - **Attempts and errors.**
   - `ingest.run_stages()` locks the row (`select ... for update`), replaces the chunks and marks the document `processed`. On failure it raises `StageError`; it never records anything.
   - `ingest.process()` keeps P1's inline contract for `ingest()`, which the evaluation and `paid:smoke` use. It records `failed`, adds 1 to `attempts` and writes P1's error text, `<stage>: <Exception>: <message>`.
@@ -140,8 +152,11 @@ Implements [spec.md](spec.md), as revised against P1 and P2. Sizing: this phase 
     - The call adds 1 and refuses past the limit, so N parallel guesses can never all pass.
     - A refusal returns 429 with the larger `Retry-After`, and no verification runs.
   - A successful login calls `ratelimit.refund` on both buckets (`count = count - 1`), so only failures stay counted, as behaviour 8 requires.
+    - `rate_limit` returns the `window_start` it counted in, and `refund` takes it. A login that straddles a window boundary therefore refunds its own reservation, never one in the next window.
+    - Two concurrent successes each refund their own reservation. The floor at 0 keeps a count from going below what is reserved.
   - The email bucket keys on the normalised email, so case variants share one bucket.
-  - Behind compose without `FORWARDED_ALLOW_IPS`, every client shares the Docker gateway's address, so 20 failures lock out all logins. 6.2 adds a KNOWN-GAPS row for this, whose fix is setting `FORWARDED_ALLOW_IPS` behind a proxy.
+  - Behind compose without `FORWARDED_ALLOW_IPS`, every client shares the Docker gateway's address, so 20 failures lock out all logins. 6.2 adds a KNOWN-GAPS row for this. Its fix is setting `FORWARDED_ALLOW_IPS` to the proxy's own address, never `*`, which would let a spoofed `X-Forwarded-For` rotate the IP bucket.
+  - Signup and invite acceptance both refuse a password under 12 characters with 422 (behaviour 6).
   - The first draft's peek-then-count let a burst through (planning review, finding 1).
 - **Invite tokens never appear in a URL path.** Accepting is `POST /api/invites/accept {token, ...}`. The UI link is `/invite#<token>`; the fragment never reaches the server, so no access log records a live token.
 - **Upload limit.**
@@ -200,7 +215,9 @@ Implements [spec.md](spec.md), as revised against P1 and P2. Sizing: this phase 
 | 6 | Image, compose, CI, docs | phases 3, 4, 5 | `npm run check:compose` green; `npm run check:all` green; both CI jobs green on the pushed tip |
 | 7 | Live rows (operator, in the merge window) | phase 6, claim-green | The ledger rows below |
 
-The phase 4 route-path check, kept out of the table because a table cell would turn its `|` into a literal: `rg -n -e '"/api/documents' -e '"/api/ask' backend/tests`.
+The phase 4 route-path check, kept out of the table because a table cell would turn its `|` into a literal: `rg -n -e 'api/documents' -e 'api/ask' backend/tests`.
+- The patterns carry no leading `/`, because Git Bash rewrites an argument that starts with `/` into a Windows path (re-review, F9).
+- The new routes contain `api/workspaces/`, so neither pattern matches them.
 
 Phase 7 runs in the P4 worktree, with the main checkout's `.env` copied in. `settings.ENV_FILE` resolves to the worktree root; `.gitignore` covers it, and conftest pins every key, so the tests ignore it. Delete the copy after phase 7.
 
@@ -215,7 +232,7 @@ Phase 7, in order. Each step is a ledger row by hand:
    - accept an invite in a private window.
 
    Save a screenshot to STATUS.
-5. Read the Supavisor pool size in the dashboard, and record it against the peak of 12.
+5. Read the Supavisor pool size in the dashboard, and record it in the KNOWN-GAPS row on the connection cap.
 6. Record the image size from `docker system df` against free disk.
 
 ## Parallel windows
@@ -255,7 +272,7 @@ Every window ends green, with one exception. Between E1 and E2, `test_documents_
 | 1.2 | all backend | **Tables**, schema `loreos`:<br>- `users(id uuid pk, email text unique check (email = lower(email)), password_hash, created_at)`.<br>- `memberships(user_id, workspace_id, role check in ('owner','member'), created_at)`, primary key `(user_id, workspace_id)`, cascading from both.<br>- `sessions(id text pk, user_id cascade, created_at, expires_at)`.<br>- `invites(token_hash text pk, workspace_id cascade, created_by on delete set null, created_at, expires_at, used_at)`.<br>- `api_keys(id uuid pk, workspace_id cascade, kind check in ('secret'), name, prefix, key_hash unique, created_at, last_used_at, revoked_at)`.<br>- `rate_limits(bucket, window_start timestamptz, count int)`, primary key `(bucket, window_start)`.<br>**`documents`**: `kind` in (`md`, `txt`, `pdf`, `docx`, `url`); `content` nullable; new `source_url text`, `next_attempt_at timestamptz` and `locked_until timestamptz`.<br>**Role and policy**: `loreos_app`, policy `workspace_isolation`.<br>**conftest**: `TEST_OWNER = "testdb_owner"`, `TEST_DATABASE`, `ADMIN_URL`. `sql()` runs as the owner. `clean` also empties `users`, `invites`, `api_keys` and `rate_limits`. |
 | 1.3 | all | **db**: `db.workspace_session(workspace_id)` (same signature), `db.system_session()`.<br>**verify_rls**: `verify_rls.problems(conn) -> list[str]`, `verify_rls.idle_timeout(conn) -> str`, `verify_rls.main() -> int`.<br>**Script**: `npm run db:verify-rls`.<br>**Allowlist**: `test_isolation.SYSTEM_SESSION_FILES`. |
 | 1.4 | 3.3, 6.1 | The guard asks on:<br>- `paid:worker`;<br>- python or uv naming `loreos` and `worker`;<br>- `docker compose` `up`, `start`, `restart` or `run`, except an `up` whose only service is `testdb`. |
-| 2.1 | 4.2 | - `async ratelimit.rate_limit(bucket, limit, window_s) -> tuple[bool, int]`: one upsert that adds 1; allowed while `count <= limit`.<br>- `async ratelimit.refund(bucket, window_s) -> None`: subtracts 1 from the current window, never below 0.<br>- The int is whole seconds to the window's end, 0 when allowed.<br>- `ratelimit._now` is the clock tests patch. |
+| 2.1 | 4.2 | - `async ratelimit.rate_limit(bucket, limit, window_s) -> Slot(allowed: bool, retry_after: int, window_start: datetime)`: one upsert that adds 1; allowed while `count <= limit`.<br>- `async ratelimit.refund(bucket, window_start) -> None`: subtracts 1 from that window's row, never below 0.<br>- `retry_after` is whole seconds to the window's end, 0 when allowed.<br>- `ratelimit._now` is the clock tests patch. |
 | 2.2 | 3.2, 4.x | **Passwords**: `MIN_PASSWORD = 12`, `password_problem(pw) -> str \| None`, `hash_password`, `verify_password(hash, pw) -> bool`, `normalize_email`, `async authenticate(conn, email, pw) -> User \| None`.<br>**Sessions**: `User(id, email)`, `async create_user(conn, email, pw) -> UUID`, `SESSION_COOKIE = "loreos_session"`, `SESSION_DAYS = 14`, `async create_session(conn, user_id) -> str`, `async session_user(conn, token)`, `async delete_session(conn, token)`, `set_session_cookie(response, request, token)`, `clear_session_cookie(response)`.<br>**Keys**: `KEY_PREFIX = "lo_sk_"`, `async create_key(conn, workspace_id, name) -> tuple[UUID, str]`.<br>**Dependencies**:<br>- `Member(workspace_id, role, user_id \| None, key_id \| None)`.<br>- `current_member(request, workspace_id: UUID)`: 401 for missing or bad credentials, 404 for another workspace.<br>- `current_user(request) -> User`: cookie only, so 401 without a session and 403 for a Bearer.<br>- `require_owner(member) -> Member`: 403 for a member or a key.<br>Workspace routes name their path parameter `workspace_id`. |
 | 2.3 | 3.1 | - `parsing.kind_of` maps `.docx` to `docx`, and the 415 text lists it.<br>- `parsing.parse(filename, data, kind=None)`: kind `html` only through `kind=`.<br>- `parse_docx.parse(data)`, with `parse_docx.MAX_UNPACKED_BYTES = 100 * 1024 * 1024`.<br>- `parse_html.parse(data)`.<br>- Each returns `list[Section]` and raises `parsing.ParseError`. |
 | 2.4 | 3.1, 3.3 | - `fetch_url.normalise(url) -> str`, which raises `Refused`.<br>- `async fetch_url.fetch(url, *, resolve=None, dial=None) -> Fetched(content: bytes, kind: "html" \| "txt" \| "pdf", url: str)`.<br>- Exceptions: `Refused`, `TooLarge` and `UnsupportedContent` (each a `ValueError`); `HTTPStatus(Exception)` with `.status`. A timeout raises `TimeoutError`, and network failures raise `httpx2.TransportError`.<br>- Constants `MAX_BYTES`, `TIMEOUT_S`, `MAX_REDIRECTS`. |
@@ -278,7 +295,7 @@ POST /api/auth/login   {email, password}                   200 Me + cookie | 401
 POST /api/auth/logout                                      204, cookie cleared
 GET  /api/me                                               200 Me | 401
 POST /api/invites/accept  {token, email, password} logged out, {token} logged in
-                                                           201 Me + cookie | 200 Me | 404 | 409 email taken
+                                                           201 Me + cookie | 200 Me | 404 | 409 email taken | 422 password under 12
 GET  /api/workspaces                                       [{id, name, role}]
 POST /api/workspaces   {name}                              201 {id, name, role: "owner"}
 under /api/workspaces/{workspace_id}:
@@ -361,7 +378,7 @@ GET /api/health                   200 {"status": "ok"} | 503
   - **Sessions.**
     - `workspace_session` runs the one `set_config` statement first.
     - `system_session()` is one transaction as the connecting role.
-    - There is no in-process connection cap; uvicorn's `--limit-concurrency` is the cap (6.1).
+    - There is no connection cap in v1 (see "Design choices").
     - `engine()` is untouched, since the `p2-baseline` listener lives there.
   - **verify_rls.problems(conn)**, read-only, checks that `loreos_app`:
     - exists, cannot log in, has no `BYPASSRLS` and is not a superuser;
@@ -378,24 +395,30 @@ GET /api/health                   200 {"status": "ok"} | 503
     - inserting a row for B raises the RLS check, and updating B's rows touches 0 rows;
     - selecting from `loreos.users` is refused;
   - **with the role switched and no workspace set**, both counts are 0;
-  - **verify_rls**: `problems()` returns `[]` on the migrated database. Then, parametrised, each change inside a rolled-back transaction makes it name its problem:
-    - `revoke usage on schema loreos from loreos_app`;
-    - `alter table loreos.chunks disable row level security`;
-    - `drop policy workspace_isolation on loreos.documents`;
-    - `grant select on loreos.users to loreos_app`;
-    - `alter role loreos_app bypassrls`;
-    - `alter role loreos_app login`;
-    - `alter table loreos.rate_limits owner to loreos_app`;
-    - `revoke usage on schema public from loreos_app`, where `vector` lives on testdb.
-
-    A change `testdb_owner` may not make runs through the `postgres` admin connection, still inside a rolled-back transaction. Role attributes are transactional.
-
-    The SET-option assertion is pinned on a role without `SET`, also in a rolled-back transaction: create a role, grant `loreos_app` to it `with set false`, `set local role` to it, and `problems()` names the `SET` option. Each assertion has a case that turns it red;
+  - **verify_rls**: `problems()` returns `[]` on the migrated database.
+    - **How the negatives run.** Every negative runs as `postgres`, connected to this checkout's `TEST_DATABASE`, never the `postgres` database: there, every `loreos` check would fail anyway and prove nothing. Each one is inside a transaction that is rolled back; role attributes and grants are transactional.
+    - **What each asserts.** `problems() == [expected]`, exactly one problem, so a negative cannot pass on some other failure.
+    - **The negatives** are parametrised, one per assertion in `problems()`:
+      - `revoke usage on schema loreos from loreos_app`;
+      - `alter table loreos.chunks disable row level security`;
+      - `drop policy workspace_isolation on loreos.documents`;
+      - `grant select on loreos.users to loreos_app`;
+      - `revoke delete on loreos.chunks from loreos_app`, for the DML check;
+      - `alter role loreos_app bypassrls`;
+      - `alter role loreos_app login`;
+      - `alter role loreos_app superuser`;
+      - `alter table loreos.rate_limits owner to loreos_app`;
+      - `revoke usage on schema public from loreos_app` **and** `revoke usage on schema public from public`. On testdb `vector` lives in `public`, which grants `USAGE` to PUBLIC, and `has_schema_privilege` counts that grant;
+      - for the SET option: create a role, grant `loreos_app` to it `with set false`, `set local role` to it, and `problems()` names the `SET` option.
+    - **Coverage pin.** A test asserts that the parametrisation has one case per message `problems()` can emit;
   - **source scan**: `system_session(` and `engine()` appear only in `SYSTEM_SESSION_FILES`:
     - `db.py`, `auth.py`, `ratelimit.py`, `worker.py`, `admin.py`, `verify_rls.py`, `smoke.py`;
     - `main.py`, for the health check only;
     - `routes/auth.py`, `routes/workspaces.py`, `evaluation/run.py`;
-  - **no commit inside a session**: `.commit(` appears nowhere under `backend/loreos/`, because the role and the workspace setting are transaction-local.
+  - **nothing ends a session's transaction early**, because the role and the workspace setting are transaction-local. The scan covers `backend/loreos/`:
+    - no `.commit(` or `.rollback(`, except a savepoint's (`begin_nested`);
+    - no SQL text containing `commit`, `rollback`, `reset role` or `set role` outside `db.py`;
+    - the scan is mutation-proven by inserting `await session.commit()` into `ingest.run_stages`.
 - Red first: on the old `db.py`, the session runs as `testdb_owner` and the unfiltered count is A + B. The implementer's `redproof` removes `set_config('role','loreos_app',true)`, and the count case goes red.
 - Skills to load: codebase-design, harness:authoring-a-check, superpowers:test-driven-development
 - Predicted size: 4 files, about 280 lines, 80 minutes
@@ -427,11 +450,12 @@ GET /api/health                   200 {"status": "ok"} | 503
 - Change:
   - `rate_limit` runs one `insert ... on conflict (bucket, window_start) do update set count = rate_limits.count + 1 returning count` in `system_session`.
   - Windows are fixed, computed from `_now()`.
-  - `refund` subtracts 1 from the current window's row, floored at 0.
+  - `refund(bucket, window_start)` subtracts 1 from that window's row, floored at 0.
   - Old windows are never pruned: a `ponytail:` comment names the ceiling, and 6.2 adds a KNOWN-GAPS row.
 - Acceptance check: `uv --directory backend run python -m pytest tests/test_ratelimit.py` green:
   - with limit 3, three calls are allowed and the fourth is refused, with `retry_after` in 1 to 60;
   - `refund` after a call lets one more call through, and a refund on an empty bucket leaves 0;
+  - a call at 59 s into a 60 s window, with the clock then moved past the boundary, refunds the first window and leaves the second untouched;
   - the next window allows again (patched clock);
   - 10 concurrent calls count exactly 10;
   - buckets are independent.
@@ -563,7 +587,7 @@ GET /api/health                   200 {"status": "ok"} | 503
     - otherwise a new `pending` row is stored with its content.
   - **enqueue_url**:
     - normalises the URL with `fetch_url.normalise`, and hashes the normalised URL with sha256;
-    - an existing row is re-queued as above, so submitting again fetches again;
+    - an existing row is re-queued as above, so submitting again fetches again. The re-queue runs with `set local lock_timeout = '2s'`, so re-submitting a URL that the worker is processing raises the lock timeout (sqlstate `55P03`) rather than waiting minutes. 4.4 answers it with 409;
     - otherwise it stores a `url` row, with `filename` and `source_url` set to the normalised URL and no content.
   - **run_stages**:
     - takes `select ... for update` on the row first;
@@ -629,7 +653,7 @@ GET /api/health                   200 {"status": "ok"} | 503
   - **processing context**: inside `fake_embed` during processing, the probe reads `show idle_in_transaction_session_timeout` as `10min`, `current_user` as `loreos_app`, and `current_setting('app.workspace_id')` as the document's workspace (behaviour 3);
   - **startup**: a blank `OPENAI_API_KEY`, and a `verify_rls` problem, each exit naming the problem;
   - **dimension**: `llm.embed` raises `EmbeddingDimensionError` after one batch of wrong-size vectors.
-- Red first: import failure. The main session runs two `redproof` mutations (`worker.py` matches the spend pattern):
+- Red first: import failure. The main session runs three `redproof` mutations (`worker.py` matches the spend pattern):
   - count a systemic failure as a transient one, and the systemic case goes red;
   - drop the expired-lease branch from the claim, and the lease case goes red;
   - drop `and locked_until = :claimed_lease` from the failure record, and the fence case goes red.
@@ -682,6 +706,7 @@ GET /api/health                   200 {"status": "ok"} | 503
 - Change:
   - **signup**, under `pg_advisory_xact_lock`:
     - refused with 403 once any user exists;
+    - a password under 12 characters gets 422, naming the minimum;
     - otherwise creates the user and a workspace named `workspace_name` (default "My workspace");
     - adds owner memberships on that workspace and on `DEFAULT_WORKSPACE_ID`;
     - creates a session.
@@ -696,9 +721,10 @@ GET /api/health                   200 {"status": "ok"} | 503
   - **invite accept** (`POST /api/invites/accept`, with the token in the body), in one transaction:
     1. `update ... set used_at = now() where token_hash = :h and used_at is null and expires_at > now() returning workspace_id`. No row gets 404.
     2. Logged in: add the membership, idempotently.
-    3. Logged out: create the account and a session. An email already registered gets 409, and the invite stays unused.
+    3. Logged out: create the account and a session. A password under 12 characters gets 422, and an email already registered gets 409. In both cases the invite stays unused, because the transaction rolls back.
 - Acceptance check: `uv --directory backend run python -m pytest tests/test_auth.py` green:
   - **signup**:
+    - an 11-character password gets 422, and no user is stored;
     - the second signup gets 403;
     - two concurrent first signups, with `auth.create_user` patched to sleep 0.3 s first, give one 201 and one 403;
     - the first owner sees its new workspace and Default, and never an `eval-*` one;
@@ -707,19 +733,20 @@ GET /api/health                   200 {"status": "ok"} | 503
     - logout deletes the row, and `/api/me` afterwards gets 401;
   - **rate limit**:
     - the 6th failure for one email gets 429 with `Retry-After`;
-    - 20 concurrent wrong logins for one email call the hasher's `verify` at most 5 times (spied);
+    - **concurrent guesses**: 20 wrong logins for one email call the hasher's `verify` at most 5 times. They are sent truly at once with `asyncio.gather` over an `httpx2` ASGI transport. The `verify` spy blocks on an `asyncio.Event`, set once every request has either reached `verify` or been answered. Under peek-then-count, all 20 would then pass the peek before any failure is written;
     - `A@Example.com` and `a@example.com` share one bucket;
     - after 20 failures across emails from one client, the next request gets 429;
-    - a correct password after 4 failures logs in, and the next 4 failures still pass before the 429, because the success was refunded;
+    - **refund arithmetic**: after 4 failures, a correct password logs in, and its reservation is refunded (count 4 of 5). The next wrong password gets 401 (count 5), and the one after gets 429. A variant with `refund` patched to do nothing gets 429 on the attempt right after the success;
     - an unknown email and a wrong password give identical status and body;
   - **invites**:
     - an invite is single use: the second accept gets 404;
     - an expired invite gets 404;
-    - a 409 leaves the invite usable;
+    - a 409 leaves the invite usable, and so does a 422 for an 11-character password;
     - a logged-in accept adds the membership.
-- Red first: the router is empty, so a GET gets 404 and a POST gets 405, from the GET catch-all. The implementer runs two `redproof` mutations:
+- Red first: the router is empty, so a GET gets 404 and a POST gets 405, from the GET catch-all. The implementer runs three `redproof` mutations:
   - remove the advisory lock, and the concurrent-signup case goes red;
-  - move the email bucket's `rate_limit` after `verify`, and the concurrent-login case goes red.
+  - replace the reservation with peek-then-count (read the bucket, verify, then count a failure), and the concurrent-guesses case goes red;
+  - drop the `password_problem` call from invite accept, and its 422 case goes red.
 - Skills to load: superpowers:test-driven-development
 - Predicted size: 2 files, about 330 lines, 80 minutes
 
@@ -764,7 +791,7 @@ GET /api/health                   200 {"status": "ok"} | 503
     - JSON `{url}` goes to `enqueue_url`, and a `Refused` gets 422;
     - a multipart `file` (`request.form(max_files=1)`) gets P1's filename cleanup, then the 413 and 415 checks, then `find_by_sha` and `enqueue`. A duplicate that is not `failed` gets 200, anything else 202;
     - any other content type gets 415.
-  - **List, get and delete**: delete is owner only. All three run through `workspace_session`.
+  - **List, get and delete**: delete is owner only. All three run through `workspace_session`. Delete runs with `set local lock_timeout = '2s'`, and a lock timeout (sqlstate `55P03`) answers 409, "the document is being processed; try again shortly".
   - **ask** returns `asdict(answer)` with `text` renamed `answer`. That one mapping is what lets P3's `retrieval_mode` through.
   - **Moved assertions**: the P1 cases move as "Moved P1 assertions" lists, then `test_local_only.py` is deleted.
 - Acceptance check: `uv --directory backend run python -m pytest tests/test_documents_api.py tests/test_ask_api.py tests/test_isolation.py` green:
@@ -775,6 +802,7 @@ GET /api/health                   200 {"status": "ok"} | 503
     - an owner deletes;
     - a key lists and asks in its own workspace;
   - **URLs**: a URL is queued with 202 and kind `url`, and submitting it again gives 202 again;
+  - **lock timeout**: while another connection holds the document row with `select ... for update`, delete gets 409 within about 2 s, and so does re-submitting a URL whose row is locked;
   - **ask fields**: `answering.answer` is patched to return a dataclass with P1's four fields plus an extra `retrieval_mode`, and the JSON carries `retrieval_mode`. Today `Answer` has exactly the four fields P1 mapped, so only an extra field can tell a field-by-field mapping from `asdict`;
   - **isolation**: two workspaces with chunks.
     - With A's key, the list returns only A's ids, and ask cites only A's chunk ids.
@@ -793,17 +821,20 @@ GET /api/health                   200 {"status": "ok"} | 503
   - **Request**: no credentials, but with an Origin.
   - **Expected**: 401 every time.
   - **Source scan**, which also catches a switch read at import or under an unlisted name:
-    - `os.environ` and `getenv` appear under `backend/loreos/` only in `settings.py`, plus an allowlist with a reason per entry. Today's readers outside `settings.py`:
-      - `ingest.scrub`'s `OPENAI_API_KEY`, which it scrubs from error text;
-      - `smoke.py`'s and `evaluation/__main__.py`'s `npm_config_*` reads;
-      - `evaluation/calibration.py`'s `INIT_CWD`.
+    - It matches `\benviron\b` and `getenv` under `backend/loreos/`, which also catches `from os import environ`.
+    - Every hit outside `settings.py` must appear in an allowlist keyed on **file and key**, each entry with its reason. So a new read, even in an allowlisted file, fails. Today's entries:
+      - `ingest.py`: `OPENAI_API_KEY`, which `scrub` removes from error text;
+      - `smoke.py`: `npm_config_dry_run`;
+      - `evaluation/__main__.py`: the `npm_config_*` loop and `npm_config_dry_run`;
+      - `evaluation/calibration.py`: `INIT_CWD`.
 
-      None of them can gate a route;
-    - the scan lists what it found, so a new reader fails naming its file.
+      None of these can gate a route.
+    - The scan prints what it found, so a new reader fails naming its file and key.
 - Acceptance check: `uv --directory backend run python -m pytest tests/test_auth.py` green.
-- Red first: the implementer runs two `redproof` mutations:
+- Red first: the implementer runs three `redproof` mutations:
   - insert `if os.environ.get("DISABLE_AUTH") == "1": return Member(workspace_id, "owner", None, None)` at the top of `auth.current_member`, and both the request pin and the source scan go red;
-  - insert a module-level `_OFF = os.getenv("LOREOS_OPEN")` in `auth.py`, and the source scan goes red.
+  - insert a module-level `_OFF = os.getenv("LOREOS_OPEN")` in `auth.py`, and the source scan goes red;
+  - add `os.environ.get("SKIP_SCRUB")` to `ingest.py`, an allowlisted file with a new key, and the source scan goes red.
 - Skills to load: harness:authoring-a-check
 - Predicted size: 1 file, about 70 lines, 30 minutes
 
@@ -976,7 +1007,7 @@ GET /api/health                   200 {"status": "ok"} | 503
       - copies `backend/` and `frontend/dist`;
       - sets `TIKTOKEN_CACHE_DIR` and fetches `cl100k_base` at build time;
       - runs as a non-root user;
-      - `CMD` runs uvicorn on `0.0.0.0:8000` with `--proxy-headers` and `--limit-concurrency 5`, the connection cap from "Design choices".
+      - `CMD` runs uvicorn on `0.0.0.0:8000` with `--proxy-headers`. There is no `--limit-concurrency`; see "No connection cap in v1".
   - **.dockerignore**: `.env`, `.env.*`, `.git`, `.claude/`, `.codex/`, `**/node_modules`, `backend/.venv`, `**/__pycache__`, `eval/corpus`, `frontend/dist`.
   - **docker-compose.yml**:
     - `migrate`: `python -m alembic upgrade head`.
@@ -985,7 +1016,7 @@ GET /api/health                   200 {"status": "ok"} | 503
     - All three use one image, with `env_file: [{path: .env, required: false}]`.
     - `testdb` stays as it is, under profile `test`.
   - **check-compose.mjs**, with the override file and the empty env file, under project `loreos-check`:
-    0. `config --format json`, and stop unless every service's `DATABASE_URL`, `OPENAI_API_KEY` and `OPENAI_BASE_URL` are the check's own values. The api's command must carry `--limit-concurrency`.
+    0. `config --format json`, and stop unless every service's `DATABASE_URL`, `OPENAI_API_KEY` and `OPENAI_BASE_URL` are the check's own values.
     1. `up --build --wait`.
     2. `/api/health` returns 200.
     3. `/` and `/login` contain `<div id="root">`.
@@ -1013,7 +1044,8 @@ GET /api/health                   200 {"status": "ok"} | 503
   - **KNOWN-GAPS loses** two closed rows: the frontend-checks row (closed by 5.1) and the chunked-upload row (closed by 4.1 and 4.4).
   - **KNOWN-GAPS gains**:
     - a row for expired sessions, used invites and old `rate_limits` windows, none of which is ever pruned;
-    - a row for the shared login IP bucket. Behind compose without `FORWARDED_ALLOW_IPS`, every client shares the Docker gateway's address, so 20 failed logins from anyone lock out every login for 15 minutes. The fix is setting `FORWARDED_ALLOW_IPS` behind a proxy;
+    - a row for the shared login IP bucket. Behind compose without `FORWARDED_ALLOW_IPS`, every client shares the Docker gateway's address, so 20 failed logins from anyone lock out every login for 15 minutes. The fix is setting `FORWARDED_ALLOW_IPS` to the proxy's own address behind a proxy. Never `*`, which lets a spoofed `X-Forwarded-For` rotate the IP bucket;
+    - a row for the missing connection cap. A burst of concurrent requests beyond Supavisor's client limit gets 500s. The trigger is users reporting 500s under load, or a deployment expecting more concurrent users than that limit. The row records the pool size that phase 7 reads;
     - in the spend-guard row, the worker and compose spellings the guard does not catch: `docker run` of the image through a shell, and a compose command held in a variable.
   - **Decision 0002's** license paragraph points at 0007.
   - **STATUS** records the windows, the ledgers and the image size.
@@ -1092,7 +1124,7 @@ The first review is [reviews/plan.md](reviews/plan.md), on `a05f789`.
 | # | Severity | Finding | Resolution |
 |---|---|---|---|
 | 1 | major | Peek-then-count lets a burst of login guesses through; raw-email buckets; a shared gateway IP | "Login rate limit": reserve first, refund on success, normalised email; 4.2 adds a concurrent-login test with a `verify` spy and a mutation; 6.2 adds the gateway KNOWN-GAPS row |
-| 2 | major | The `MAX_CONNECTIONS` semaphore deadlocks on nested sessions | Semaphore dropped. uvicorn `--limit-concurrency 5` caps the api (6.1), and `check:compose` asserts the flag. Peak recounted at 12 |
+| 2 | major | The `MAX_CONNECTIONS` semaphore deadlocks on nested sessions | Semaphore dropped. The uvicorn cap that first replaced it failed re-review (F1), so v1 has no cap, with a KNOWN-GAPS row (6.2) |
 | 3 | major | 1.2's mutation cannot go red on a persisted test database | The bootstrap drops and recreates the test database each session, under a sanitised, quoted name of at most 63 bytes |
 | 4 | major | 4.4's every-field test cannot fail while `Answer` has four fields | The test returns a dataclass with an extra `retrieval_mode` |
 | 5 | major | `verify_rls` has one negative case | 1.3 adds a negative per assertion, each in a rolled-back transaction, including the SET option |
@@ -1110,4 +1142,19 @@ The first review is [reviews/plan.md](reviews/plan.md), on `a05f789`.
 | 17 | nit | The `\|` in the phase 4 `rg` pattern | The check moved out of the table, with two `-e` patterns |
 | 18 | nit | An unrouted POST gets 405, not 404 | The red-first wording in 4.2, 4.3 and 4.4 |
 | 19 | nit | `system_session` callers beyond the spec's list | The spec's interface row now lists the workspace, member, invite and key routes |
-| - | not probed | A commit inside a session would drop the role switch | 1.3's source scan: no `.commit(` under `backend/loreos/` |
+| - | not probed | A commit inside a session would drop the role switch | 1.3's source scan for transaction ends (see re-review F8) |
+
+The re-review is on `5ebbbac`, in the same review file.
+
+| # | Severity | Finding | Resolution |
+|---|---|---|---|
+| F1 | major | uvicorn's `--limit-concurrency` counts idle keep-alive sockets: 503s for two browser tabs, outside the `{detail}` contract | No cap in v1 ("No connection cap in v1"), with a KNOWN-GAPS row. Delete and URL re-queue use `lock_timeout` 2 s and answer 409 (3.1, 4.4) |
+| F2 | major | The refund test's arithmetic was wrong | 4.2: after 4 failures and a refunded success, the next failure gets 401 and the one after 429; without the refund, the next attempt gets 429 |
+| F3 | major | `verify_rls` negatives: the `public` revoke cannot fire; no superuser or DML negative; the wrong database | Run as `postgres` against `TEST_DATABASE`, asserting exactly `[expected]`; revoke from PUBLIC too; add the superuser and DML cases, and a pin of one case per message |
+| F4 | major | Invite accept enforces no password rule | 422 on signup and accept, each tested; a redproof on accept |
+| F5 | minor | Recreating the test database: FORCE kills other runs; the deny list; autocommit; role drift; leftover databases | No FORCE, stopping with the database's name instead; the admin URL hard-coded with a prefix assertion; autocommit; role attributes reset at bootstrap; tmpfs clears leftovers |
+| F6 | minor | A refund can hit the next window | `rate_limit` returns `window_start` and `refund` takes it; a boundary test |
+| F7 | minor | The concurrent-login test may not test the race | Requests truly concurrent via `asyncio.gather` over an ASGI transport, with a gated `verify` spy; the mutation is peek-then-count |
+| F8 | minor | The source scans miss `rollback`, SQL `commit` or `reset role`, `from os import environ`, and new keys in allowlisted files | The transaction scan covers them; the environment scan matches `\benviron\b` and keys its allowlist on file and key |
+| F9 | minor | The `rg` check is vacuous in Git Bash | Patterns without a leading `/` |
+| F10 | nit | STATUS, the session count, the mutation count, `FORWARDED_ALLOW_IPS` | Reworded: STATUS, 3.3 (three mutations), the KNOWN-GAPS row (the proxy's address, never `*`) |

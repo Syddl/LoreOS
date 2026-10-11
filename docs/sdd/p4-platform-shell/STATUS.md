@@ -15,12 +15,16 @@ The single carrier of state between sessions. Update it before a session ends; t
     - testdb's owner role is created by conftest's bootstrap, since CI's service container starts before checkout and cannot read an init file;
     - the compose guard also asks on `start`, `restart` and `run`, since each one starts the worker;
     - Origin is required on every write without a Bearer key, login included. Spec behaviour 9 now says so;
-    - the worker checks the grants at startup, a stop releases its claim, and `MAX_CONNECTIONS` is 10.
+    - the worker checks the grants at startup, and a stop releases its claim. The first draft also capped connections at 10; plan review removed that cap (see below).
   - The fifth, verifying the live rows early against a throwaway Supabase project, is left to the operator. The default is the merge window.
 - Step 5, plan review by execution:
   - **First review**: "fix then re-review", with 6 majors, 10 minors and 3 nits ([reviews/plan.md](reviews/plan.md)). The reviewer ran `check:all` green at `a05f789`.
-  - **Revision**: answers every finding. The plan's last section maps each one to its change.
-  - **Re-review**: next.
+  - **Revision** `5ebbbac`: answers every finding. The plan's last section maps each one to its change.
+  - **Re-review** of `5ebbbac`: "fix then re-review", appended to `reviews/plan.md`.
+    - Findings 1, 5 and 17 were not resolved.
+    - It found new defects F1 to F10. F1, uvicorn's concurrency cap counting idle sockets, made the main session drop the connection cap from v1, with a KNOWN-GAPS row.
+  - **Second revision**: answers F1 to F10, mapped in the plan's last section.
+  - **Third review**: next.
 - **For P3's spec revision**, which starts from `main`, so it reads these from this branch until P4 merges:
   - decision 0007, for tqdm;
   - the shared-file rules in this spec's Risks;
@@ -28,7 +32,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Step 5 re-review: a fresh independent reviewer checks the revised `plan.md` against `reviews/plan.md`'s findings, and its verdict is appended to `reviews/plan.md`.
+Step 5, third review: a fresh independent reviewer checks the second revision against both reviews in `reviews/plan.md`. Its verdict is appended there. On "merge", implementation starts with tasks 1.1 and 1.2 (main session).
 
 ## Blockers
 

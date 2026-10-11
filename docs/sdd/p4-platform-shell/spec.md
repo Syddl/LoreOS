@@ -132,7 +132,7 @@ None. The `test_auth.py` row pins that no environment read disables auth or isol
 - Retrieval, fusion, rerank and evaluation files: P3 owns them in this window.
 - Publishable keys, allowed domains and the widget: P6. `rate_limit` is built here for login and reused there.
 - Roles beyond owner and member; email sending; password reset by email; OAuth or SSO; the crawler; caching; Redis.
-- The connection pool: `db.engine()` keeps NullPool, with its connect retry (`p2-baseline`, `5f3e7a8`). Concurrency is capped by uvicorn's `--limit-concurrency` and by a worker that handles one document at a time. The live row records the pooler's client limit against that peak.
+- The connection pool and a connection cap: `db.engine()` keeps NullPool, with its connect retry (`p2-baseline`, `5f3e7a8`). v1 sets no connection cap. A burst beyond the pooler's client limit gets 500s, recorded as a KNOWN-GAPS row with its trigger. Both caps tried in plan review failed, and a correct one is more code than a learning build's traffic justifies.
 
 ## Revised against P1 and P2
 
