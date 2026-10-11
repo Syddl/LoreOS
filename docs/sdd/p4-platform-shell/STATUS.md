@@ -25,7 +25,11 @@ The single carrier of state between sessions. Update it before a session ends; t
     - It found new defects F1 to F10. F1, uvicorn's concurrency cap counting idle sockets, made the main session drop the connection cap from v1, with a KNOWN-GAPS row.
   - **Second revision** `f24c0dc`: answers F1 to F10, mapped in the plan's last section.
   - **Third review** of `f24c0dc`: **merge**, appended to `reviews/plan.md`. Its seven minors, N1 to N7, are folded into their tasks; the plan's last section maps them. Step 5 is done.
-- Step 6, implementation: next. The start window runs 1.1, then 1.2, both in the main session.
+- Step 6, implementation:
+  - **1.1** done, `f9146d7`: `ALLOWED_HOSTS`, `startup_problems()`, and argon2-cffi, python-docx, beautifulsoup4, httpx2 and httpcore2. Red first on the exact key set; redproof PASS.
+  - **1.2** done, `1db5430`: migration `0002_platform`, the per-checkout non-superuser test database, and every settings key pinned. `check:backend` 344 passed as `testdb_owner`. The redproof (`docx` dropped from the kind check) PASS, which proves the per-session recreate.
+  - **1.4** done, `a584ef9`: the guard asks on the worker and on compose `up`, `start`, `restart`, `run` and `watch`, except a testdb-only `up`. check:spend 123/123; redproof PASS, with exactly the 2 interpreter cases red.
+  - **1.3**: in progress, with an implementer in its own worktree.
 - **For P3's spec revision**, which starts from `main`, so it reads these from this branch until P4 merges:
   - decision 0007, for tqdm;
   - the shared-file rules in this spec's Risks;
@@ -33,7 +37,11 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Task 1.1 (main session): `uv --directory backend add argon2-cffi python-docx beautifulsoup4 httpx2 httpcore2`, then `settings.allowed_hosts()` and `startup_problems()`, the `ALLOWED_HOSTS` line in `.env.example` and `test_config.py`. Red first. `uv.lock` and `.env.example` ask the operator.
+Finish window A:
+1. Read 1.3's report.
+2. Cherry-pick its commit and run its redproofs.
+3. Run `npm run check:all`.
+4. Start window B: 2.1 to 2.5 by implementers, and 5.1 in the main session.
 
 ## Blockers
 
