@@ -41,9 +41,9 @@ def test_over_20_mb_is_413_and_writes_nothing(client, fake_embed):
 
 
 def test_other_types_are_415_naming_the_accepted_ones(client, fake_embed):
-    response = post(client, "contract.docx", b"PK\x03\x04 not a supported type")
+    response = post(client, "slides.pptx", b"PK\x03\x04 not a supported type")
     assert response.status_code == 415
-    assert ".md, .markdown, .txt or .pdf" in response.json()["detail"]
+    assert ".md, .markdown, .txt, .pdf or .docx" in response.json()["detail"]
     assert document_rows() == 0 and fake_embed == []
 
 

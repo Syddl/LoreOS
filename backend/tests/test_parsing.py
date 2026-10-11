@@ -1,5 +1,7 @@
+import io
 import time
 
+import docx
 import pytest
 
 from loreos.parsing import ParseError, Section, UnsupportedType, kind_of, parse
@@ -153,9 +155,22 @@ def test_damaged_pdf_is_a_parse_error():
 
 
 def test_kinds_and_unsupported_types():
-    assert [kind_of(n, b"x") for n in ("a.md", "a.MARKDOWN", "a.txt", "a.pdf")] == ["md", "md", "txt", "pdf"]
-    with pytest.raises(UnsupportedType, match=r"\.md, \.markdown, \.txt or \.pdf"):
-        kind_of("contract.docx", b"PK\x03\x04")
+    assert [kind_of(n, b"x") for n in ("a.md", "a.MARKDOWN", "a.txt", "a.pdf", "a.DOCX")] == ["md", "md", "txt", "pdf", "docx"]
+    for name in ("slides.pptx", "page.html"):  # html only through parse's kind=
+        with pytest.raises(UnsupportedType, match=r"\.md, \.markdown, \.txt, \.pdf or \.docx"):
+            kind_of(name, b"PK\x03\x04")
+
+
+def test_parse_dispatches_docx_by_name_and_html_by_kind():
+    document = docx.Document()
+    document.add_heading("Contract", level=1)
+    document.add_paragraph("Terms apply.")
+    buffer = io.BytesIO()
+    document.save(buffer)
+    assert parse("contract.docx", buffer.getvalue()) == [Section(["Contract"], None, "Terms apply.")]
+    assert parse("page", b"<h1>Page</h1><p>Body &amp; more.</p>", kind="html") == [Section(["Page"], None, "Body & more.")]
+    with pytest.raises(ParseError, match="cannot read the DOCX"):
+        parse("contract.docx", b"PK\x03\x04 not a zip")
 
 
 def test_non_utf8_and_empty_text_are_parse_errors():
