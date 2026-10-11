@@ -94,7 +94,20 @@ The single carrier of state between sessions. Update it before a session ends; t
     - **4.1 found and fixed** a path in the UI fallback that leaked credentials on Windows. `/%5c%5chost%5cshare%5cx` decoded to a UNC path, so `resolve()` opened an SMB connection, and the dev account's NTLM hash could leak from any web page. The fallback now refuses rooted, drive and `..` paths before touching the filesystem, with a test.
     - **4.2 and 4.3 agree:** `Me` and `GET /api/workspaces` both hide `eval-*`, and both refuse a blank, long or `eval-` name.
   - **Window E2 closed:** `check:all` PASS at `a929684` (ledger).
-  - **Simplifications for the fix wave**, from the E2 reports:
+  - **4.5** done (`e8aea62`): no environment key opens any of the 15 guarded routes, and only `settings.py` reads the environment, apart from an allowlist keyed on file and key. Its two redproofs PASS, plus the main session's `ingest.py` one.
+  - **6.1** done (`ddc5276`):
+    - `Dockerfile` (python:3.14-slim, the frontend built in a Node stage, the tiktoken encoding baked in, a non-root user) and `.dockerignore`;
+    - compose with `migrate`, `api` and `worker`, with `env_file` optional;
+    - `check:compose` under its own project, with its config asserted before anything starts, plus a CI job.
+
+    `check:compose` PASS in about 84 s. The image `loreos:local` is 93 MB, against 19 GB free on C:. The redproof (the UI fallback answering 404) PASS.
+  - **Simplifications** done (`db83b17`): one owner each for the workspace name rule and the workspace list (`loreos/workspaces.py`), for token hashing (`auth.token_hash`) and for the lock timeout (`ingest.LOCK_TIMEOUT`). The six affected test files pass, 226 tests.
+  - **6.2** done:
+    - KNOWN-GAPS loses the frontend-checks and chunked-upload rows.
+    - It gains rows for the unpruned auth tables, the shared login IP bucket, the missing connection cap, and the file-versus-URL hash collision.
+    - Its spend-guard row names the worker and compose spellings.
+    - Decision 0002 points at 0007.
+  - **Simplifications from the E2 reports**, done in `db83b17`, apart from the last:
     - **Duplicated name rules:** `EVAL_NAME` and the `eval-` check live in both `routes/auth.py` and `routes/workspaces.py`. Move the check into `Name` and have `list_workspaces` call `workspaces_of`.
     - **Private helper used across modules:** `auth._sha256` is called from both route files; make it public.
     - **Duplicated timeout:** `'2s'` sits in both `ingest.py` and `routes/documents.py`; make it one `LOCK_TIMEOUT` constant.
@@ -115,10 +128,13 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Window E3:
-1. 4.5, the no-off-switch pin, by an implementer. The main session runs its `ingest.py` mutation.
-2. Then the simplifications listed above.
-3. Then window F: 6.1 (image, compose, check:compose) and 6.2 (docs), both in the main session.
+Steps 7 and 9:
+1. Run `npm run check:all` on the tip.
+2. Push `p4-platform-shell`, so CI runs the checks and compose jobs on Linux.
+3. Run the whole-branch review with an independent reviewer (security lens), then a fix wave if needed.
+4. Step 11 (claim-green) follows on the pushed tip.
+
+Pushing is outward-facing, so ask the operator first.
 
 ## Blockers
 

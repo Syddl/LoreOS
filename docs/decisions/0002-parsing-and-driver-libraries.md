@@ -24,6 +24,8 @@ The libraries for each v1 file type, and the database driver:
 
 `check:licenses` fails on any installed backend package that declares a strong or weak copyleft license, or none. The one exception is certifi under MPL-2.0. tiktoken needs it through requests, and an unmodified MPL file does not change LoreOS's MIT license. Nothing else is exempt. P3's fastembed brings in tqdm (MPL-2.0 AND MIT), and P3 decides that one on its own.
 
+Superseded in part by [decision 0007](0007-mpl-2-0-dependencies-unmodified.md): every MPL-2.0 dependency used unmodified is allowed, not only certifi, and `check:licenses` also checks the frontend's production tree.
+
 All LoreOS tables, including `alembic_version`, live in the Postgres schema `loreos`, never `public`.
 
 ## Why
