@@ -434,6 +434,15 @@ def test_login_sets_the_session_cookie_with_its_flags(clean, scheme):
     assert (sha256(morsel.value),) in sql("select id from loreos.sessions")
 
 
+def test_a_login_over_http_whose_origin_is_https_gets_a_secure_cookie(clean):
+    """Behind a TLS proxy uvicorn does not trust, the request reads http, but the browser's Origin says https."""
+    make_user("ann@example.com")
+    client = TestClient(main.app, base_url="http://127.0.0.1:8000", headers={"origin": "https://127.0.0.1:8000"})
+    response = login(client, "ann@example.com", PASSWORD)
+    assert response.status_code == 200
+    assert bool(SimpleCookie(response.headers["set-cookie"])[auth.SESSION_COOKIE]["secure"]) is True
+
+
 def test_logout_deletes_the_session_row_and_clears_the_cookie(owner):
     token = owner.client.cookies.get(auth.SESSION_COOKIE)
     assert owner.client.get(ME).json() == {

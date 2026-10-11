@@ -11,6 +11,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from typing import Annotated
+from urllib.parse import urlsplit
 
 import argon2
 from fastapi import Depends, HTTPException, Request, Response
@@ -230,13 +231,18 @@ async def current_user(request: Request) -> User:
 
 
 def set_session_cookie(response: Response, request: Request, token: str) -> None:
-    """Secure only over https, as uvicorn reports the scheme behind a trusted proxy."""
+    """Secure when the request URL or its Origin is https.
+
+    Every caller is a cookie write, so the Origin rule made it send a same-host Origin: the scheme the browser
+    used. That keeps the cookie Secure behind a TLS proxy uvicorn does not trust; plain http stays non-Secure.
+    """
+    https = "https" in (request.url.scheme, urlsplit(request.headers.get("origin", "")).scheme)
     response.set_cookie(
         SESSION_COOKIE,
         token,
         max_age=SESSION_DAYS * 24 * 3600,
         path="/",
-        secure=request.url.scheme == "https",
+        secure=https,
         httponly=True,
         samesite="lax",
     )
