@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 feature: p1-thin-slice
 ---
 
@@ -9,17 +9,18 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Open tasks
 
+None open. The record:
 - Steps 9 to 12: done. PR #2 merged into main as `33f1564`, a merge commit, with CI green. `npm run db:migrate` ran live on Supabase (ledger row by hand).
-- `npm run paid:smoke` (row 16): needs `OPENAI_API_KEY` and the operator's yes at the ask prompt. Its verification row is added by hand.
-- Step 14, close: after `paid:smoke` passes.
+- `npm run paid:smoke` (row 16): PASS on 2026-10-11 (ledger row by hand). Its cost was under $0.01 against the $5 cap in [decision 0005](../../decisions/0005-cheaper-judge-and-a-spend-cap.md): one two-chunk upload and two questions. Smoke prints no usage, so this is an estimate.
+- Step 14: closed.
 
 ## Next step
 
-`npm run paid:smoke -- --dry-run` (free preflight; the guard asks, since no paid form is exempt), then `npm run paid:smoke`. It runs detached and logs to `docs/sdd/p1-thin-slice/scratch/smoke.log`. The estimate is under $0.01: one small upload and two questions. It counts against the $5 cap in [decision 0005](../../decisions/0005-cheaper-judge-and-a-spend-cap.md).
+None. P1 is done.
 
 ## Blockers
 
-None. `OPENAI_API_KEY` is set (2026-10-11).
+None.
 
 ## Steps run differently
 
@@ -35,6 +36,7 @@ None. `OPENAI_API_KEY` is set (2026-10-11).
 | 2026-10-06T12:38:12.637Z | p1-thin-slice | 59729a75 | `npm run check:all` | PASS | 45.5 s | paid:smoke against real OpenAI; db:migrate on Supabase's session pooler; dev:api in a browser |
 | 2026-10-06T12:43:53.444Z | p1-thin-slice | cb02451f | `npm run check:all` | PASS | 47.8 s | paid:smoke against real OpenAI; db:migrate on Supabase's session pooler; dev:api in a browser |
 | 2026-10-06 (by hand, live) | p1-thin-slice | 660a61c1 | `alembic upgrade head` (what `npm run db:migrate` runs) on Supabase's session pooler, then a read-only check | PASS | | Version `0001`; `loreos.{workspaces,documents,chunks,alembic_version}` exist; default workspace present; `chunks.embedding` is `vector(1536)`; `anon` cannot select `loreos.documents`; `public.documents` untouched. Not covered: paid:smoke, dev:api |
+| 2026-10-11 (by hand, live) | p2-baseline | 213ef8b | `npm run paid:smoke` against OpenAI and Supabase, approved at the ask; log in `scratch/smoke.log` | PASS | | Preflight ok (migration 0001, both models listed). Upload processed, 2 chunks. The answerable question was cited `[1]` to `release-process.md > Release process > Schedule`, and the unanswerable one was refused (`model_not_found`). Workspace deleted. Not covered: dev:api in a browser (P4's UI replaces it) |
 
 ## Port ledger
 
