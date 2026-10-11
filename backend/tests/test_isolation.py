@@ -1,4 +1,4 @@
-"""Workspace isolation: workspace_session runs as loreos_app under RLS, verify_rls's assertions, and the source scans.
+"""Workspace isolation: workspace_session runs as loreos_app under RLS, verify_rls's assertions, the routes, and the source scans.
 
 The role and app.workspace_id are transaction-local, so the scans pin that nothing in backend/loreos ends a
 session's transaction early or switches the role back, and that only the listed files open a session that
@@ -15,8 +15,8 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from conftest import ADMIN_URL, BACKEND, TEST_DATABASE, TEST_OWNER, sql
-from loreos import verify_rls
+from conftest import ADMIN_URL, BACKEND, TEST_DATABASE, TEST_OWNER, make_key, make_user, sql
+from loreos import llm, verify_rls
 from loreos.db import engine, system_session, workspace_session
 from loreos.embeddings import EMBEDDING_DIM
 
@@ -118,6 +118,44 @@ def test_with_the_role_switched_and_no_workspace_set_nothing_is_visible(ab, work
             return (await conn.execute(text(COUNTS))).all()
 
     assert asyncio.run(go()) == [(0, 0)]
+
+
+# Through the api: the brief's test, with a key per workspace
+
+
+def ids(table: str, workspace) -> set[str]:
+    return {str(row[0]) for row in sql(f"select id from loreos.{table} where workspace_id = :w", w=workspace)}
+
+
+def test_a_key_lists_and_cites_only_its_own_workspace(ab, fake_embed, fake_draft):
+    a, b = ab
+    key = make_key(a).client
+    assert {d["id"] for d in key.get(f"/api/workspaces/{a}/documents").json()} == ids("documents", a)
+
+    fake_draft.reply = llm.Draft(found=True, text="Here [1] and there [2].")  # [2] survives only if B's chunk is a hit
+    body = key.post(f"/api/workspaces/{a}/ask", json={"question": "t"}).json()
+    assert {c["chunk_id"] for c in body["citations"]} == ids("chunks", a)
+    assert {str(hit.chunk_id) for hit in fake_draft.hits[0]} == ids("chunks", a)
+
+
+def test_a_key_on_another_workspaces_documents_gets_404(ab, fake_embed, fake_draft):
+    a, b = ab
+    key = make_key(a).client
+    [b_document] = ids("documents", b)
+    assert key.get(f"/api/workspaces/{b}/documents").status_code == 404
+    assert key.get(f"/api/workspaces/{b}/documents/{b_document}").status_code == 404
+    assert key.get(f"/api/workspaces/{a}/documents/{b_document}").status_code == 404
+    assert key.post(f"/api/workspaces/{b}/ask", json={"question": "t"}).status_code == 404
+    assert fake_embed == [] and fake_draft.calls == []
+
+
+def test_an_owner_cannot_delete_another_workspaces_document_through_its_own_path(ab):
+    a, b = ab
+    owner = make_user("a-owner@example.com", "owner", workspace_id=a)
+    [b_document] = ids("documents", b)
+    assert owner.client.delete(f"/api/workspaces/{a}/documents/{b_document}").status_code == 404
+    assert owner.client.delete(f"/api/workspaces/{b}/documents/{b_document}").status_code == 404
+    assert ids("documents", b) == {b_document}
 
 
 def test_verify_rls_finds_no_problem_on_the_migrated_database(db):
