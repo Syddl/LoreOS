@@ -84,3 +84,90 @@ Key files:
 - `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/.dockerignore`
 - `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/scripts/compose-check.yml`
 - `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/docs/KNOWN-GAPS.md`
+
+
+---
+
+# Review: p4-platform-shell, re-review of the fix wave (`313de88..d0f3975`)
+
+Lens: security
+Reviewer: harness:reviewer, fresh context, read-only shell.
+
+## Executed
+
+```
+npm run check:all
+PASS: hooks 395/395, agent-hooks 7/7, backend 705 passed / 2 skipped (247 s),
+licenses 48/48 + 84/84, spend 123/123, frontend 7 files / 38 tests, tsc, vite build
+
+npm run check:compose
+PASS: config points at checkdb + fake key; build tagged only "loreos-check:local";
+api healthy (so its new startup verify_rls passed on checkdb); / and /login serve;
+no .env under /app; worker running; image 93 MB; stack removed
+```
+
+I also did read-only inspection:
+- I read `git diff 313de88 d0f3975` and these files in full: verify_rls, main, worker, auth, fetch_url, documents and workspaces routes, ingest.run_stages, migration 0002, compose, the check override, check-compose.mjs, `.dockerignore`, Invite, router, and the new and changed tests.
+- I read the private-network lists in CPython 3.14's `ipaddress.py`.
+- I read moby's `daemon/internal/restartmanager/restartmanager.go` and `daemon/daemon.go` (restore) through WebFetch.
+
+## Resolution of findings 1 to 14
+
+| # | Resolution |
+|---|---|
+| 1 | **Resolved.** <ul><li>`policy` requires both policies to be named `workspace_isolation`, permissive, `polcmd='*'`, `polroles={loreos_app}`, with both expressions equal to the migration's. Names are unique per table, and `other_policy` refuses any other name, so exactly two policies exist.</li><li>A restrictive or `to public` policy under another name trips `other_policy`. Recreated under the same name, it trips `policy` (`polpermissive` or `polroles`).</li><li>FORCE RLS binds only owners, and `owner` already refuses a loreos_app that owns or inherits an owner. FORCE on the connecting role fails closed: system_session then sees 0 rows.</li><li>`isolated` runs the real `workspace_session` path.</li><li>Any remaining bypass needs DDL by the owner (triggers, rules, a shadowed `current_setting` or `=` on search_path). That is outside this check's misconfiguration model.</li><li>The PG17 string: exact comparison can only fail falsely, never pass falsely. I know of no change in how these expression nodes are rendered between PG13 and PG17, but it is unverified on Supabase.</li><li>Tests and report agree: 3 new negatives, and `isolated` added to 5 more.</li></ul> |
+| 2 | **Resolved.** Code and the 3 real-grant tests agree. A systemic failure later than batch 1 of the embed stage stays uncounted, but its retry fails free at batch 1. |
+| 3 | **Resolved.** The lifespan runs `isolation_problems()`, and a test pins it. In my check:compose run the api started healthy with it. |
+| 4 | **Resolved.** The Origin's scheme is read only on cookie writes (login, signup, invite accept), which the same-host Origin rule already gates. A client spoofing it only marks its own cookie Secure. |
+| 5 | **Not resolved.** The no-handover gap is recorded nowhere: KNOWN-GAPS has no row for it. The new text "owners cannot be removed" is false once a second owner exists. |
+| 6 | **Resolved** (`**/.env`, `**/.env.*`). No check fails if reverted. |
+| 7 | **Resolved.** <ul><li>`UPLOAD` carries the router's full prefixed path, and `Match.FULL` needs POST.</li><li>`add_document` reads its body only after `current_member`, and it is the only route that reads a body itself.</li><li>Trailing-slash and HEAD requests get the 64 KB cap.</li><li>Tests cover chunked, declared and a 100 KB login (0 `rate_limits` rows).</li></ul> |
+| 8 | **Resolved.** Seen in my run: only `loreos-check:local` was named. No check fails if reverted. |
+| 9 | **Not resolved, because** `on-failure` opens a new unasked-start path (Findings, row 1). |
+| 10 | **Resolved** as a spec note. main is still at `faa149c`, so the merge itself is pending. |
+| 11 | **Resolved.** `::` becomes 0.0.0.0 and `::1` becomes 0.0.0.1. Both fall in IPv4 `0.0.0.0/8`, so both are refused. `::ffff:` addresses are outside `::/96` and are unwrapped first. A sibling prefix remains (Findings, row 4). |
+| 12 | **Resolved.** |
+| 13 | **Resolved**, with a test. |
+| 14 | **Resolved** for session history. The custom router keeps `null` state, so `replaceState(null, …)` loses nothing. |
+
+On the specific questions:
+- **API needs the database at startup:** this fails closed. With no database, uvicorn exits and compose's `unless-stopped` restarts the api. No secret is logged, and I found no new defect.
+- **`lock` stage:** no UI or parser reads the stage values.
+
+## Findings
+
+| Severity | file:line | Impact | Fix | Owner |
+|---|---|---|---|---|
+| minor | `docker-compose.yml:40`; `docs/KNOWN-GAPS.md:7` | <ul><li>Moby's `on-failure` branch checks only `exitCode != 0` and ignores `hasBeenManuallyStopped`.</li><li>At startup the daemon restarts every container where `cfg.AutoRestart && c.ShouldRestart()`. A container found dead on restore gets exit code 255.</li><li>So a worker whose last exit was non-zero starts and spends at the next Docker start, even after `docker compose stop`, with no command for the guard to ask on. Three ways to get there: the startup check's exit-1 loop; a SIGKILL after the 10 s stop grace, when `release()` waits on an unreachable database; or a host or VM kill.</li><li>`unless-stopped` never restarted a manually stopped worker.</li><li>The KNOWN-GAPS row says "a daemon restart does not start it".</li></ul> | Pick one:<ul><li>`restart: "no"` on the worker, so a crashed worker waits for an approved `up`;</li><li>or keep `on-failure` and rewrite the clause to name the non-zero-exit case, with `docker compose down` as the way to keep the worker stopped.</li></ul> | dispatcher |
+| nit | `docs/sdd/p4-platform-shell/STATUS.md:111`; `scripts/check-compose.mjs:39` | <ul><li>"Each fix is red first, and each redproof PASS" overstates the proof. The fix-2 report says its redproof was not run. Fix-4 has none for the Shell fix. Findings 5, 6, 8 and 9 have no test that fails on revert.</li><li>Reverting 8 or 9 keeps both checks green: the image inspect would only print `NaN MB`.</li></ul> | <ul><li>Reword STATUS fix by fix.</li><li>In check-compose step 0, assert from the resolved config that every image is `loreos-check:local` and that the worker's `restart` is what the decision for row 1 sets.</li></ul> | dispatcher |
+| nit | `backend/loreos/routes/workspaces.py:92`; `docs/KNOWN-GAPS.md` | Finding 5's text is wrong once two owners exist, and the gap (no role change, no ownership handover) has no row. | Text: "a workspace keeps at least one owner, and no route makes a member an owner yet". Add a KNOWN-GAPS row for the gap. | implementer (4.3) for the text; dispatcher for the row |
+| nit | `backend/loreos/fetch_url.py:25` | <ul><li>A sibling of 11: IPv4-translated `::ffff:0:0:0/96` (RFC 2765) is in no CPython 3.14 private list and is not `ipv4_mapped`.</li><li>So `::ffff:0:7f00:1` passes `_public` and is dialled.</li><li>It is unroutable on Linux without a SIIT translator, the same reach as 11 had.</li></ul> | <ul><li>Add `ipaddress.ip_network("::ffff:0:0:0/96")` to `CARRIES_IPV4`.</li><li>Add a `translated.test` case beside `compat.test`.</li></ul> | implementer (2.4) |
+
+Out of scope: the `isolated` count scans `loreos.chunks` without an index that starts with `workspace_id`, on every api and worker start. That is a performance cost, not this lens.
+
+## Verdict
+
+**Merge.** Only one minor and three nits remain, and each has an owner above.
+
+## Does NOT prove
+
+- **Supabase:** I did not run `db:verify-rls` live, and the PG15/17 rendering of `ISOLATION` is unverified there. A mismatch would stop both the api and the worker, with a "recreate it as 0002 does" message that does not fit the cause.
+- **Docker restart behaviour:** this comes from reading moby's source, not from executing it. The owner can confirm it:
+  1. Make the worker exit 1 (for example, point `DATABASE_URL` at nothing) under a fake key.
+  2. Run `docker compose stop`.
+  3. Restart Docker.
+  4. Run `docker compose ps worker`.
+- **The `::ffff:0:7f00:1` verdict** comes from the CPython source, not from a run. The owner can run `uv --directory backend run python -c "import ipaddress; print(ipaddress.ip_address('::ffff:0:7f00:1').is_global)"`.
+- **Redproof claims:** not re-run, because that would modify files.
+- **Browser:** not checked with a real browser: the Secure cookie through a real TLS proxy, the browser's global history after `replaceState`, and StrictMode.
+- **Other platforms and services:** no CI on Linux, no real OpenAI call, and no document reached the compose worker.
+- **`isolated` on a separate connection** failing while every static check passes: I could not build such a case, and neither could the fix-1 report.
+
+Key files:
+- `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/docker-compose.yml`
+- `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/docs/KNOWN-GAPS.md`
+- `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/docs/sdd/p4-platform-shell/STATUS.md`
+- `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/scripts/check-compose.mjs`
+- `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/backend/loreos/routes/workspaces.py`
+- `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/backend/loreos/fetch_url.py`
+- `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/backend/loreos/verify_rls.py`

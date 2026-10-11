@@ -37,13 +37,17 @@ async function main() {
   if (config.status !== 0) fail(`docker compose config failed:\n${config.stderr}`);
   const services = JSON.parse(config.stdout).services;
   for (const name of ['migrate', 'api', 'worker']) {
+    if (services[name]?.image !== 'loreos-check:local') fail(`${name} would build ${services[name]?.image}, not loreos-check:local`);
     const env = services[name]?.environment ?? {};
     if (!String(env.DATABASE_URL ?? '').includes('@checkdb:')) fail(`${name} would use DATABASE_URL ${env.DATABASE_URL ?? '(unset)'}, not checkdb`);
     for (const [key, want] of Object.entries(CHECK_ENV)) {
       if (env[key] !== want) fail(`${name} would use ${key}=${env[key] ?? '(unset)'}, not the check's own value`);
     }
   }
-  console.log('  ok   the resolved config points every service at checkdb, a fake key and an unroutable OpenAI URL');
+  // The worker spends, so Docker must never start it on its own.
+  if (services.worker?.restart !== 'no') fail(`the worker's restart policy is ${services.worker?.restart}, not "no"`);
+  console.log('  ok   the resolved config points every service at checkdb, a fake key and an unroutable OpenAI URL,');
+  console.log('       builds loreos-check:local, and never restarts the worker on its own');
 
   // 1. Build, migrate, start; --wait returns once the api is healthy.
   if (docker(['up', '--build', '--wait', '--wait-timeout', '600']).status !== 0) fail('docker compose up --build --wait failed');
@@ -59,7 +63,9 @@ async function main() {
 
   // 4 and 5. No .env in the build context or the image.
   const ignored = fs.readFileSync(path.join(root, '.dockerignore'), 'utf8').split(/\r?\n/).map((line) => line.trim());
-  if (!ignored.includes('.env')) fail('.dockerignore does not list .env');
+  for (const pattern of ['.env', '.env.*', '**/.env', '**/.env.*']) {
+    if (!ignored.includes(pattern)) fail(`.dockerignore does not list ${pattern}`);
+  }
   const probe = "import pathlib, sys; found = sorted(str(p) for p in pathlib.Path('/app').rglob('.env*')); print(found); sys.exit(1 if found else 0)";
   const inImage = docker(['run', '--rm', '--no-deps', '--entrypoint', 'python', 'api', '-c', probe], { capture: true });
   if (inImage.status !== 0) fail(`the image holds an env file: ${inImage.stdout.trim()} ${inImage.stderr.trim()}`);

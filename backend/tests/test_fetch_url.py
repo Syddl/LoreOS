@@ -23,6 +23,7 @@ NAMES = {
     "empty.test": [],
     "nat64.test": ["64:ff9b::a00:1"],  # NAT64 (RFC 6052) carrying 10.0.0.1; ipaddress calls the prefix global
     "compat.test": ["::7f00:1"],  # IPv4-compatible (deprecated, RFC 4291) carrying 127.0.0.1; also called global
+    "translated.test": ["::ffff:0:7f00:1"],  # IPv4-translated (RFC 2765) carrying 127.0.0.1; also called global
 }
 PAGES = {
     "/page.html": ("text/html; charset=utf-8", b"<p>hello</p>"),
@@ -107,7 +108,7 @@ def test_a_private_address_is_refused(get, host):
     assert get.dialled == []
 
 
-@pytest.mark.parametrize("name", ["mixed.test", "empty.test", "nat64.test", "compat.test"])
+@pytest.mark.parametrize("name", ["mixed.test", "empty.test", "nat64.test", "compat.test", "translated.test"])
 def test_a_name_is_refused_unless_every_address_is_public(get, name):
     with pytest.raises(Refused):
         get(f"http://{name}/page.html")

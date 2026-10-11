@@ -108,20 +108,30 @@ The single carrier of state between sessions. Update it before a session ends; t
     - Its spend-guard row names the worker and compose spellings.
     - Decision 0002 points at 0007.
   - **Step 9, the whole-branch review** ([reviews/branch.md](reviews/branch.md), at `313de88`): "fix then re-review", with 1 major, 9 minors and 4 nits. The review ran `check:all` and `check:compose`, both PASS.
-  - **Step 10, the fix wave.** Each fix is red first, and each redproof PASS (reports `tasks/fix-1` to `fix-4`):
-    - **FW1** (findings 1, 3, 7, 12): `verify_rls` now checks the policy exactly (permissive, `for all`, `loreos_app` only, the migration's condition) and that no other policy exists. It also confirms that a session for an unknown workspace sees 0 rows. The api runs it at startup. Request bodies are capped at 64 KB except uploads. The caller scan also watches `create_async_engine` and `database_url(`.
-    - **FW2** (finding 2): a systemic failure after a paid embedding counts as an attempt, so a document stops after 3 batches. A failure before the stages is labelled `lock`.
-    - **FW3** (finding 4): the cookie is `Secure` when the Origin is https.
-    - **FW4** (findings 13, 14): logout after expiry goes to `/login`, and the invite token leaves the browser history.
-    - **Main session** (`40baf17`):
-      - IPv4-compatible `::/96` addresses are judged by the IPv4 address they carry (finding 11, which was confirmed);
-      - `.dockerignore` excludes nested `.env` files (6);
-      - the check builds its own image tag, `loreos-check:local` (8);
-      - the worker restarts only on failure (9);
-      - an accurate last-owner 409 (5);
-      - the spec and KNOWN-GAPS follow the fixes (10).
+  - **Step 10, the fix wave** (reports `tasks/fix-1` to `fix-4`). The proof differs fix by fix:
+    - **FW1** (findings 1, 3, 7, 12). Red first; four redproofs PASS.
+      - `verify_rls` now checks the policy exactly (permissive, `for all`, `loreos_app` only, the migration's condition) and that no other policy exists. It also confirms that a session for an unknown workspace sees 0 rows.
+      - The api runs it at startup.
+      - Request bodies are capped at 64 KB, except uploads.
+      - The caller scan also watches `create_async_engine` and `database_url(`.
+    - **FW2** (finding 2): a systemic failure after a paid embedding counts as an attempt, so a document stops after 3 batches. A failure before the stages is labelled `lock`. Red first; the main session's two redproofs PASS.
+    - **FW3** (finding 4): the cookie is `Secure` when the Origin is https. Red first; redproof PASS.
+    - **FW4** (findings 13, 14): logout after expiry goes to `/login`, and the invite token leaves the browser history. Red first for both; redproof PASS for the invite fix only.
+    - **Main session** (`40baf17`). Finding 11 has a red-first test. The others had no failing test until the re-review fixes below.
+      - IPv4-compatible `::/96` addresses are judged by the IPv4 address they carry (finding 11, which was confirmed).
+      - `.dockerignore` excludes nested `.env` files (6).
+      - The check builds its own image tag, `loreos-check:local` (8).
+      - The worker restart policy changes (9).
+      - The last-owner 409 is reworded (5).
+      - The spec and KNOWN-GAPS follow the fixes (10).
     - `e1fd29e`: one `verify_rls.isolation_problems()` for the api and the worker.
     - `check:all` PASS and `check:compose` PASS at `e1fd29e` (ledger).
+  - **Step 9, the re-review** ([reviews/branch.md](reviews/branch.md), at `d0f3975`): **merge**, with 1 minor and 3 nits, each fixed:
+    - **Worker restart:** the worker's `restart` is `"no"`. `on-failure` would restart a worker whose last exit was non-zero at the next Docker start, even after a stop.
+    - **The check pins it:** `check:compose` now asserts from the resolved config every service's image (`loreos-check:local`), the worker's restart policy, and the four `.env` patterns in `.dockerignore`, so reverting 6, 8 or 9 fails the check.
+    - **The last-owner text, and a gap row:** the 409 now says "a workspace keeps at least one, and no route makes a member an owner yet", and KNOWN-GAPS gains a row for the missing role change.
+    - **One more IPv6 form:** IPv4-translated `::ffff:0:0:0/96` is judged like NAT64. Red first.
+    - **This line:** reworded fix by fix.
   - **Simplifications from the E2 reports**, done in `db83b17`, apart from the last:
     - **Duplicated name rules:** `EVAL_NAME` and the `eval-` check live in both `routes/auth.py` and `routes/workspaces.py`. Move the check into `Name` and have `list_workspaces` call `workspaces_of`.
     - **Private helper used across modules:** `auth._sha256` is called from both route files; make it public.
