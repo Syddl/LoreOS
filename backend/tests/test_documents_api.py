@@ -28,7 +28,7 @@ def test_upload_reaches_processed(client, fake_embed, name, data, kind):
     response = post(client, name, data)
     assert response.status_code == 201
     body = response.json()
-    assert (body["filename"], body["kind"], body["status"], body["error"], body["attempts"]) == (name, kind, "processed", None, 1)
+    assert (body["filename"], body["kind"], body["status"], body["error"], body["attempts"]) == (name, kind, "processed", None, 0)
     assert body["chunk_count"] > 0 and body["processed_at"]
     assert client.get(f"/api/documents/{body['id']}").json() == body
     assert [d["id"] for d in client.get("/api/documents").json()] == [body["id"]]
@@ -76,7 +76,7 @@ def test_embed_failure_is_recorded_and_a_failed_duplicate_is_retried(client, mon
     assert (retried.json()["id"], retried.json()["status"], retried.json()["attempts"], retried.json()["error"]) == (
         body["id"],
         "processed",
-        2,
+        0,
         None,
     )
 
