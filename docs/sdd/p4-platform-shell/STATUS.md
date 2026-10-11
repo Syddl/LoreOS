@@ -185,6 +185,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 | 2026-10-11 (by hand, window E2) | p4-platform-shell | a929684 | `npm run check:all` | PASS | 301 s | hooks 395/395, agent-hooks 7/7, backend 675 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 36 tests, typecheck and build. Not covered: the same as window A |
 | 2026-10-11 (by hand, window D) | p4-platform-shell | f32f211 | `npm run check:all` | PASS | 192 s | hooks 395/395, agent-hooks 7/7, backend 523 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 36 tests, typecheck and build. Not covered: the same as window A; a real SIGTERM to the worker |
 | 2026-10-11 (by hand, window C) | p4-platform-shell | 817e257 | `npm run check:all` | PASS | 173 s | hooks 395/395, agent-hooks 7/7, backend 475 passed and 2 skipped, licenses 48/48 backend and 84/84 frontend, spend 123/123, frontend 18 tests, typecheck and build. Not covered: the same as window A |
+| 2026-10-11T17:37:12.521Z | p4-platform-shell | 5e27e799 | `npm run check:all` | PASS | 336.2 s | Supabase (db:migrate, db:verify-rls live: phase 7); check:compose (its own CI job, PASS locally at ed8ae0b); a browser; real OpenAI |
 
 ## Port ledger
 
