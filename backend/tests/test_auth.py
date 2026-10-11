@@ -8,17 +8,20 @@ import asyncio
 import hashlib
 import re
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from http.cookies import SimpleCookie
+from pathlib import Path
 from typing import Annotated
 
 import argon2
 import httpx2
 import pytest
 from fastapi import Depends, FastAPI, Request, Response
+from fastapi.routing import iter_route_contexts
 from fastapi.testclient import TestClient
 
-from conftest import ORIGIN, app_client, make_user, sql
+from conftest import ORIGIN, PINNED_ENV, app_client, make_user, sql
 from loreos import auth, main, ratelimit
 from loreos.db import system_session
 from loreos.workspaces import DEFAULT_WORKSPACE_ID
@@ -588,3 +591,59 @@ def test_a_logged_in_accept_adds_the_membership_once(member):
         ("member",)
     ]
     assert users() == 1
+
+
+# No off switch (task 4.5): no environment key turns auth or isolation off, read per request or at import.
+
+# FastAPI 0.142 keeps an included router as one entry in app.routes; iter_route_contexts flattens it to its routes.
+GUARDED = [r for r in iter_route_contexts(main.app.routes) if r.path.startswith("/api/workspaces") or r.path == ME]
+SWITCHES = sorted(PINNED_ENV) + ["AUTH", "AUTH_DISABLED", "DISABLE_AUTH", "NO_AUTH", "LOGIN_REQUIRED", "RLS", "HARNESS_HOOKS"]
+
+
+def test_the_off_switch_pin_covers_at_least_15_routes():
+    assert len(GUARDED) >= 15, [route.path for route in GUARDED]
+
+
+@pytest.mark.parametrize("route", GUARDED, ids=lambda route: f"{'/'.join(sorted(route.methods))} {route.path}")
+def test_no_environment_key_lets_a_request_without_credentials_in(db, monkeypatch, route):
+    path = re.sub(r"\{\w+\}", lambda _: str(uuid.uuid4()), route.path)
+    # a 500 is a status here, not a raised error, so every key and value that opens the route is named
+    client = TestClient(main.app, base_url=ORIGIN, headers={"origin": ORIGIN}, raise_server_exceptions=False)
+    let_in = []
+    for key in SWITCHES:
+        for value in ["off", "false", "0", "1", ""]:
+            with monkeypatch.context() as env:
+                env.setenv(key, value)
+                for method in route.methods:
+                    if (status := client.request(method, path).status_code) != 401:
+                        let_in.append(f"{key}={value!r}: {method} {path} got {status}")
+    assert let_in == []
+
+
+LOREOS = Path(auth.__file__).parent
+ENV_READ = re.compile(r"\benviron\b|getenv|\b_env\(")
+ENV_KEY = re.compile(r"""(?:\benviron(?:\.get)?\s*[(\[]|getenv\s*\()\s*["']([^"']*)["']""")
+# (file, key) for every environment read outside settings.py, and why it cannot gate a route. A read with no
+# literal key is keyed on its whole line, so a second such read, even in an allowlisted file, is new.
+ENV_READS_ALLOWED = {
+    ("ingest.py", "OPENAI_API_KEY"): "scrub removes the configured key from error text before it is stored",
+    ("smoke.py", "npm_config_dry_run"): "npm's --dry-run on paid:smoke, which narrows the run to its free preflight",
+    ("evaluation/__main__.py", "for key in os.environ:"): "the npm_config_* loop: names a paid:eval flag npm took",
+    ("evaluation/__main__.py", "npm_config_dry_run"): "npm's --dry-run on paid:eval, which narrows it to the preflight",
+    ("evaluation/calibration.py", "INIT_CWD"): "where npm ran, to resolve the calibration draft's relative path",
+}
+
+
+def test_no_module_but_settings_reads_the_environment_unless_allowlisted():
+    """Also catches `from os import environ`, a read at import, and a settings._env( call from another module."""
+    found = [
+        (name, number, key)
+        for path in sorted(LOREOS.rglob("*.py"))
+        if (name := path.relative_to(LOREOS).as_posix()) != "settings.py"
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if ENV_READ.search(line)
+        for key in ENV_KEY.findall(line) or [line.strip()]
+    ]
+    for name, number, key in found:
+        print(f"{name}:{number}: {key}")
+    assert [f"{name}:{number}: {key}" for name, number, key in found if (name, key) not in ENV_READS_ALLOWED] == []
