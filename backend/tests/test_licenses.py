@@ -3,9 +3,10 @@
 Proves: decision 0007's rule (MPL-2.0 passes, GPL, LGPL and AGPL fail, no license fails); that npm_packages()
 lists each package once per name and version, with its license in every shape npm writes; and that
 `check_licenses.py --npm-tree -` reads a non-ASCII tree from a real pipe in an interpreter without UTF-8 mode,
-the Windows default.
-Does NOT exercise: whether an MPL-2.0 dependency is in fact unmodified (no check can see that), or the real
-`npm ls` output and installed backend distributions, which `npm run check:licenses` reads.
+the Windows default, and still fails a GPL license written in curly quotes.
+Does NOT exercise: whether an MPL-2.0 dependency is in fact unmodified (no check can see that), the real
+`npm ls` output and installed backend distributions, which `npm run check:licenses` reads, or the ANSI
+decoding on Linux, where stdin is UTF-8 in either mode.
 """
 
 import json
@@ -99,7 +100,8 @@ def run_npm_tree(tree: dict) -> subprocess.CompletedProcess:
     )
 
 
-# UTF-8 for Ё and č carries the bytes 0x81 and 0x8D, which cp1252 cannot decode.
+# UTF-8 for Ё and č carries the bytes 0x81 and 0x8D, which cp1252 cannot decode. Windows Python reads a
+# text-mode stdin with surrogateescape, so that does not raise: it turns into mojibake silently.
 DESCRIPTION = "Ёлка, čaj, 日本語 ✓"
 
 
@@ -111,9 +113,11 @@ def test_npm_tree_with_a_non_ascii_description_passes_through_a_pipe():
 
 
 def test_npm_tree_with_a_copyleft_package_fails_through_a_pipe():
-    nested = {"y": {"version": "2.0.0", "license": "LGPL-3.0-only"}}
+    # Curly quotes read as cp1252 become letters ("â€œGPLâ€"), the word boundary goes, and z would pass silently.
+    nested = {"y": {"version": "2.0.0", "license": "LGPL-3.0-only"}, "z": {"version": "1.0.0", "license": "“GPL” v3"}}
     tree = {"dependencies": {"x": {"version": "1.0.0", "license": "MIT", "description": DESCRIPTION, "dependencies": nested}}}
     r = run_npm_tree(tree)
     assert r.returncode == 1, r.stderr.decode("utf-8", "replace")
     assert b"FAIL y: LGPL-3.0-only" in r.stdout
-    assert b"1/2 frontend npm packages pass" in r.stdout
+    assert b"FAIL z: " in r.stdout, "a GPL license in curly quotes must fail: stdin read as text, not bytes?"
+    assert b"1/3 frontend npm packages pass" in r.stdout
