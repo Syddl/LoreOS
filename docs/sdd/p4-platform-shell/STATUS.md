@@ -67,6 +67,21 @@ The single carrier of state between sessions. Update it before a session ends; t
     - npm repeats a package as a stub that lists no dependencies, so walking a name only once missed 14 packages;
     - a text-mode stdin on Windows silently garbles curly quotes, so a GPL license written with them passed.
   - **Main session fixes:** `test-setup.ts` now runs Testing Library's cleanup after every test (from the 5.2 report), and the 5.1 contract row no longer names `lib/utils`.
+  - **Window D**, each implemented in its own worktree, cherry-picked, with a report under `tasks/`:
+
+    | Task | What it adds | Proof |
+    |---|---|---|
+    | 3.3 | the worker: claim, classify, fenced record, release on stop, startup checks; `llm.EmbeddingDimensionError`; `paid:worker` | 48 tests; the main session's three redproofs PASS (systemic uncounted, expired lease, fence) |
+    | 5.3 | Documents screen | 7 tests; redproof PASS |
+    | 5.4 | Ask screen and citation panel | 5 tests; redproof PASS, after a test the redproof showed too weak was strengthened |
+    | 5.5 | Settings screen | 6 tests; redproof PASS |
+
+    - **Main session fix** `cd9fac6`: the `App.test.tsx` fixture answers the screens' list calls with `[]`. 5.3 and 5.5 both reported that it broke once the screens load data.
+    - **3.3's own design calls**, kept:
+      - a systemic failure sets `next_attempt_at` to +300 s;
+      - a failure outside `run_stages` (the lock select, the session setup, the commit) is recorded as stage `store`.
+    - **3.3 note:** the `llm.embed` edit changes the evaluation workspace key, as the plan's merge timing expects.
+  - **Window D closed:** `check:all` PASS at `f32f211` (ledger).
   - **Notes for later tasks**, from the window C reports:
     - **4.1:** install a handler for FastAPI's `RequestValidationError` that returns `{detail: "<message>"}` as a string. The default 422 returns a list, which `api.ts` shows as the status text (5.2).
     - **4.4:** `set local lock_timeout` lasts for the caller's whole transaction. The URL route's session should do nothing after `enqueue_url` (3.1).
@@ -83,9 +98,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Window D:
-- **Tasks:** 3.3 (the worker), plus 5.3, 5.4 and 5.5 (the Documents, Ask and Settings screens). Each goes to an implementer in its own worktree.
-- **Redproofs the main session runs itself:** 3.3's, because `worker.py` and `llm.py` match the spend pattern.
+Window E1: 4.1, the app shell, by an implementer. It removes P1's routes and adds the routers, the Origin rule (Bearer only), `BodyLimit`, health, the UI fallback, and a string-detail 422 handler. Between E1 and E2, the P1 route tests stay red, as the plan says. Then E2 (4.2, 4.3, 4.4) and E3 (4.5).
 
 ## Blockers
 
@@ -102,6 +115,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 |---|---|---|---|---|---|---|
 | 2026-10-11 (by hand, window A) | p4-platform-shell | 47ce731 | `npm run check:all` | PASS | 117 s | hooks 395/395, agent-hooks 7/7, backend 371 passed and 2 skipped, licenses 48/48, spend 123/123. Not covered: Supabase (`db:verify-rls` live, phase 7); CI on Linux; the unpushed tip |
 | 2026-10-11 (by hand, window B) | p4-platform-shell | e13614f | `npm run check:all` | PASS | 168 s | hooks 395/395, agent-hooks 7/7, backend 454 passed and 2 skipped, licenses 48/48 (backend only until 5.6), spend 123/123, frontend typecheck, test and build. Not covered: the same as window A, and the frontend tree's licenses (5.6) |
+| 2026-10-11 (by hand, window D) | p4-platform-shell | f32f211 | `npm run check:all` | PASS | 192 s | hooks 395/395, agent-hooks 7/7, backend 523 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 36 tests, typecheck and build. Not covered: the same as window A; a real SIGTERM to the worker |
 | 2026-10-11 (by hand, window C) | p4-platform-shell | 817e257 | `npm run check:all` | PASS | 173 s | hooks 395/395, agent-hooks 7/7, backend 475 passed and 2 skipped, licenses 48/48 backend and 84/84 frontend, spend 123/123, frontend 18 tests, typecheck and build. Not covered: the same as window A |
 
 ## Port ledger
