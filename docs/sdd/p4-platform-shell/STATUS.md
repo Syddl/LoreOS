@@ -83,7 +83,9 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Window C: 3.1 (enqueue and the stage pipeline), 3.2 (admin reset-password), 5.2 (API client, router and login screens) and 5.6 (license rule and the frontend tree), each by an implementer in its own worktree. The main session runs 3.1's redproof itself, because `ingest.py` matches the spend pattern.
+Window D:
+- **Tasks:** 3.3 (the worker), plus 5.3, 5.4 and 5.5 (the Documents, Ask and Settings screens). Each goes to an implementer in its own worktree.
+- **Redproofs the main session runs itself:** 3.3's, because `worker.py` and `llm.py` match the spend pattern.
 
 ## Blockers
 
@@ -100,6 +102,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 |---|---|---|---|---|---|---|
 | 2026-10-11 (by hand, window A) | p4-platform-shell | 47ce731 | `npm run check:all` | PASS | 117 s | hooks 395/395, agent-hooks 7/7, backend 371 passed and 2 skipped, licenses 48/48, spend 123/123. Not covered: Supabase (`db:verify-rls` live, phase 7); CI on Linux; the unpushed tip |
 | 2026-10-11 (by hand, window B) | p4-platform-shell | e13614f | `npm run check:all` | PASS | 168 s | hooks 395/395, agent-hooks 7/7, backend 454 passed and 2 skipped, licenses 48/48 (backend only until 5.6), spend 123/123, frontend typecheck, test and build. Not covered: the same as window A, and the frontend tree's licenses (5.6) |
+| 2026-10-11 (by hand, window C) | p4-platform-shell | 817e257 | `npm run check:all` | PASS | 173 s | hooks 395/395, agent-hooks 7/7, backend 475 passed and 2 skipped, licenses 48/48 backend and 84/84 frontend, spend 123/123, frontend 18 tests, typecheck and build. Not covered: the same as window A |
 
 ## Port ledger
 
