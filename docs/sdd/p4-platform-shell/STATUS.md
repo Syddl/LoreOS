@@ -9,13 +9,14 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Open tasks
 
-- Step 3, spec revised against P1 and P2: in progress. An audit of the draft spec against the merged code is running. Its findings become a "Revised against P1 and P2" section in `spec.md`, and the operator's decisions go into it.
-- Step 4, plan: after the spec revision.
+- Step 3, spec revised against P1 and P2: done (2026-10-11). An independent audit read the draft against the merged code, and its findings are in `spec.md`, section "Revised against P1 and P2". The operator decided three things: login with email and password ([decision 0006](../../decisions/0006-login-email-and-password.md)), MPL-2.0 allowed unmodified ([decision 0007](../../decisions/0007-mpl-2-0-dependencies-unmodified.md)), and the spend guard gating the worker and `docker compose up`. The engineering calls follow the audit's recommendations, listed in the same section, for the operator to veto.
+- Step 4, plan: next.
 - Step 5, plan review by execution: after the plan.
+- P3 needs decision 0007 (tqdm) and the shared-file rules in the spec's Risks. P3 starts from `main`, so it reads them from this branch until P4 merges.
 
 ## Next step
 
-Fold the audit's findings into `spec.md` (section "Revised against P1 and P2"), put the open decisions to the operator, then write `plan.md`.
+Write `plan.md` from the revised spec (template `templates/sdd/plan.md`): tasks in windows with one owner per file, each task with its check and red-first condition.
 
 ## Blockers
 

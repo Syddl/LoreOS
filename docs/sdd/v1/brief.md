@@ -36,7 +36,7 @@ Onyx, RAGFlow, AnythingLLM and Dify already serve organizations, and several rep
 
 ## Open questions
 
-- Login method for the UI (decided in P4).
+- Login method for the UI: email and password, decided in P4 ([decision 0006](../../decisions/0006-login-email-and-password.md)).
 - Parsing libraries per file type (decided in P1, license checked).
 - Default chunk size and overlap (measured in P3).
 
