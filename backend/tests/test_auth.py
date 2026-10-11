@@ -14,7 +14,7 @@ import pytest
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.testclient import TestClient
 
-from conftest import sql
+from conftest import ORIGIN, app_client, sql
 from loreos import auth
 from loreos.db import system_session
 
@@ -255,3 +255,45 @@ def test_clearing_the_session_cookie_expires_it():
     response = TestClient(app).post("/cookie/clear")
     morsel = SimpleCookie(response.headers["set-cookie"])[auth.SESSION_COOKIE]
     assert morsel.value == "" and morsel["max-age"] == "0" and morsel["path"] == "/"
+
+
+# The Host and Origin rules (behaviour 9), on the real app. /api/nope is never routed, so a write the Origin rule
+# lets through gets the GET catch-all's 405, and one it refuses gets 403.
+
+WRITES = ["POST", "PUT", "PATCH", "DELETE"]
+
+
+def test_a_foreign_host_header_is_refused():
+    """DNS rebinding: a page on evil.example resolved to 127.0.0.1 still sends its own Host."""
+    assert app_client().get("/api/health", headers={"host": "evil.example:8000"}).status_code == 400
+
+
+@pytest.mark.parametrize("method", WRITES)
+@pytest.mark.parametrize(
+    "origin", ["https://evil.example", "null", "http://localhost:8000", "http://127.0.0.1:3000", "http://localhost:3000", None]
+)
+def test_a_write_without_a_same_host_origin_gets_403(method, origin):
+    client = app_client(origin=origin) if origin else app_client()
+    response = client.request(method, "/api/nope")
+    assert response.status_code == 403
+    assert isinstance(response.json()["detail"], str)
+
+
+@pytest.mark.parametrize("authorization", ["Basic dXNlcjpwYXNz", "lo_sk_" + "A" * 43, "Bearerlo_sk_x", "Token x"])
+def test_only_a_bearer_header_is_exempt_from_the_origin_rule(authorization):
+    assert app_client(authorization=authorization).post("/api/nope").status_code == 403
+
+
+@pytest.mark.parametrize("method", WRITES)
+def test_a_same_host_origin_gets_past_the_origin_rule(method):
+    assert app_client(origin=ORIGIN).request(method, "/api/nope").status_code == 405
+
+
+@pytest.mark.parametrize("method", WRITES)
+@pytest.mark.parametrize("authorization", ["Bearer lo_sk_" + "A" * 43, "bearer x"])
+def test_a_bearer_write_needs_no_origin(method, authorization):
+    assert app_client(authorization=authorization).request(method, "/api/nope").status_code == 405
+
+
+def test_a_get_needs_no_origin(db):
+    assert app_client().get("/api/health").status_code == 200

@@ -1,92 +1,148 @@
-"""HTTP API. P1 serves one workspace with no login on 127.0.0.1; every upload and question spends OpenAI money."""
+"""HTTP API and the built UI: the hosts, Origin and body-size rules, health, the routers, then the UI fallback."""
 
 import logging
-import uuid
-from pathlib import PurePosixPath
-from typing import Annotated
-
+from contextlib import asynccontextmanager
+from pathlib import Path, PurePath
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request, Response, UploadFile
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, StringConstraints
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy import text
+from starlette.datastructures import Headers
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from loreos import answering, ingest, parsing
-from loreos.db import workspace_session
-from loreos.workspaces import DEFAULT_WORKSPACE_ID
+from loreos import settings
+from loreos.db import engine
+from loreos.routes import auth as auth_routes
+from loreos.routes import documents, workspaces
+from loreos.routes.documents import MAX_UPLOAD_BYTES
 
-MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 64 * 1024  # room for the multipart envelope around a file at the cap
-# P1 has no login, so only this machine may drive it: the Host check stops DNS rebinding, the Origin
-# check stops another site's page from posting here. P4's login and deployment hosts replace this.
-LOCAL_HOSTS = ["127.0.0.1", "localhost"]
+TOO_LARGE = f"the request is over {MAX_UPLOAD_BYTES // (1024 * 1024)} MB; split the file or upload a smaller one"
+DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"  # the repo root's frontend build
+WRITES = {"POST", "PUT", "PATCH", "DELETE"}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-app = FastAPI(title="LoreOS")
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=LOCAL_HOSTS)
+log = logging.getLogger("loreos.api")
 
 
-@app.middleware("http")
-async def refuse_cross_origin_writes(request: Request, call_next):
-    """A browser sends Origin on a cross-origin POST; curl and the TestClient send none.
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Refuse to start, naming each missing or wrong setting, rather than fail on the first request (behaviour 19)."""
+    problems = settings.startup_problems()
+    for problem in problems:
+        log.error(problem)
+    if problems:
+        raise RuntimeError("the api cannot start: " + "; ".join(problems))
+    yield
 
-    Same origin means the Origin's host:port is the Host the request was sent to, so a page on
-    another local port (another dev server) is refused too. A body declared over the upload cap is
-    refused here, before Starlette receives and spools it.
+
+app = FastAPI(title="LoreOS", lifespan=lifespan)
+
+
+class BodyLimit:
+    """413 past MAX_REQUEST_BYTES, read per request, whether or not the body declares its length.
+
+    A declared Content-Length over the cap is refused before the app runs. A chunked body declares none, so
+    receive is wrapped to count bytes as they arrive: past the cap it raises, and FastAPI's handler answers 413
+    while the route is still reading, before anything is parsed or stored.
     """
-    origin = request.headers.get("origin")
-    if request.method not in ("GET", "HEAD") and origin is not None and urlsplit(origin).netloc != request.headers.get("host"):
-        return JSONResponse({"detail": f"cross-origin request from {origin} refused"}, status_code=403)
-    if int(request.headers.get("content-length") or 0) > MAX_REQUEST_BYTES:
-        return JSONResponse({"detail": "the request is over 20 MB; split the file or upload a smaller one"}, status_code=413)
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        cap = MAX_REQUEST_BYTES
+        if int(Headers(scope=scope).get("content-length") or 0) > cap:
+            return await JSONResponse({"detail": TOO_LARGE}, status_code=413)(scope, receive, send)
+        received = 0
+
+        async def counted() -> Message:
+            nonlocal received
+            message = await receive()
+            received += len(message.get("body", b""))
+            if received > cap:
+                raise HTTPException(413, TOO_LARGE)
+            return message
+
+        await self.app(scope, counted, send)
+
+
+async def same_origin_writes(request: Request, call_next):
+    """Behaviour 9: a write without an API key needs an Origin whose host:port is the Host it was sent to.
+
+    Browsers send Origin on every POST, PUT, PATCH and DELETE, same-origin ones included, so a missing or
+    "null" Origin is refused; P1 let a missing one through. Only a Bearer request is exempt: current_member
+    then authenticates by the key alone and never reads the cookie, and another site's page cannot add an
+    Authorization header without a CORS preflight, which this api never answers.
+    """
+    scheme = (request.headers.get("authorization") or "").partition(" ")[0]
+    if request.method in WRITES and scheme.lower() != "bearer":
+        origin = request.headers.get("origin")
+        if origin is None or urlsplit(origin).netloc.lower() != request.headers.get("host", "").lower():
+            return JSONResponse(
+                {"detail": "cross-origin write refused: send it from this site's own pages, or with an API key"},
+                status_code=403,
+            )
     return await call_next(request)
 
 
-class AskRequest(BaseModel):
-    question: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+# The last added runs first: the Host check, then the Origin rule, then the body limit.
+app.add_middleware(BodyLimit)
+app.add_middleware(BaseHTTPMiddleware, dispatch=same_origin_writes)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts())
 
 
-@app.post("/api/documents")
-async def upload_document(file: UploadFile, response: Response) -> ingest.Document:
-    data = await file.read(MAX_UPLOAD_BYTES + 1)
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, "the file is over 20 MB; split it or upload a smaller file")
-    filename = PurePosixPath((file.filename or "upload").replace("\\", "/")).name
+def _field(loc: tuple) -> str:
+    """('body', 'question') gives 'question'; a missing body stays 'body'."""
+    return ".".join(str(part) for part in loc[1:] or loc)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Every error is {detail: str}; FastAPI's default list would reach the UI as the bare status text."""
+    detail = "; ".join(f"{_field(error['loc'])}: {error['msg']}" for error in exc.errors())
+    return JSONResponse({"detail": detail}, status_code=422)
+
+
+@app.get("/api/health")
+async def health() -> dict:
+    """200 when the database answers; the compose healthcheck. Any failure is 503, logged by its class only."""
     try:
-        parsing.kind_of(filename, data)
-    except parsing.UnsupportedType as e:
-        raise HTTPException(415, str(e)) from e
-    async with workspace_session(DEFAULT_WORKSPACE_ID) as session:
-        existing = await ingest.find_by_sha(session, DEFAULT_WORKSPACE_ID, ingest.sha256(data))
-        document = await ingest.ingest(session, DEFAULT_WORKSPACE_ID, filename, data)
-    response.status_code = 200 if existing else 201
-    return document
+        async with engine().connect() as conn:
+            await conn.execute(text("select 1"))
+    except Exception as e:
+        log.warning("health failed class=%s", type(e).__name__)
+        raise HTTPException(503, "the database is not answering; check DATABASE_URL and that the database is up") from e
+    return {"status": "ok"}
 
 
-@app.get("/api/documents")
-async def list_documents() -> list[ingest.Document]:
-    async with workspace_session(DEFAULT_WORKSPACE_ID) as session:
-        return await ingest.list_documents(session, DEFAULT_WORKSPACE_ID)
+app.include_router(auth_routes.router)
+app.include_router(workspaces.router)
+app.include_router(documents.router)
 
 
-@app.get("/api/documents/{document_id}")
-async def get_document(document_id: uuid.UUID) -> ingest.Document:
-    async with workspace_session(DEFAULT_WORKSPACE_ID) as session:
-        document = await ingest.get_document(session, DEFAULT_WORKSPACE_ID, document_id)
-    if not document:
-        raise HTTPException(404, "no such document")
-    return document
+@app.get("/{path:path}", include_in_schema=False)
+async def ui(path: str) -> FileResponse:
+    """The built UI, last: a file inside DIST, else index.html for the app's own routes. An api path gets a JSON 404.
 
-
-@app.post("/api/ask")
-async def ask(body: AskRequest) -> dict:
-    async with workspace_session(DEFAULT_WORKSPACE_ID) as session:
-        result = await answering.answer(session, DEFAULT_WORKSPACE_ID, body.question)
-    return {
-        "found": result.found,
-        "answer": result.text,
-        "reason": result.reason,
-        "citations": jsonable_encoder(result.citations),
-    }
+    Starlette has already decoded the path, so %2e%2e arrives as "..". A path with a root, a drive or a ".." is
+    refused before it touches the filesystem: on Windows, resolving \\\\host\\share dials out to that host. Then
+    the resolved file must still be inside DIST, so a link inside the build cannot lead out of it either.
+    """
+    if path == "api" or path.startswith("api/"):
+        raise HTTPException(404, "no such API route")
+    dist = DIST.resolve()
+    if not (dist / "index.html").is_file():
+        raise HTTPException(404, "the UI is not built; run npm run build --prefix frontend")
+    relative = PurePath(path)
+    if not relative.anchor and ".." not in relative.parts:
+        file = (dist / relative).resolve()
+        if file.is_relative_to(dist) and file.is_file():
+            return FileResponse(file)
+    return FileResponse(dist / "index.html")

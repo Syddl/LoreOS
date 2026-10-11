@@ -52,9 +52,14 @@ from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
-from loreos.db import engine  # noqa: E402
+from loreos import auth  # noqa: E402
+from loreos.db import engine, system_session  # noqa: E402
 from loreos.embeddings import EMBEDDING_DIM  # noqa: E402
 from loreos.workspaces import DEFAULT_WORKSPACE_ID  # noqa: E402
+
+ORIGIN = "http://127.0.0.1:8000"  # the clients' base URL, so this Origin is the same host the request goes to
+W = f"/api/workspaces/{DEFAULT_WORKSPACE_ID}"  # the default workspace's path prefix
+PASSWORD = "correct horse battery"
 
 
 def sql(query: str, **params):
@@ -194,10 +199,62 @@ def fake_judge(monkeypatch):
     return fake
 
 
-@pytest.fixture
-def client(clean):
+def app_client(**headers: str):
+    """A TestClient on the real app at ORIGIN, sending these headers on every request."""
     from fastapi.testclient import TestClient
 
     from loreos.main import app
 
-    return TestClient(app, base_url="http://127.0.0.1:8000")
+    return TestClient(app, base_url=ORIGIN, headers=headers)
+
+
+def make_user(email: str, role: str | None = None, workspace_id=DEFAULT_WORKSPACE_ID) -> SimpleNamespace:
+    """A user with PASSWORD and, given a role, that membership in workspace_id. .client is logged in and sends ORIGIN."""
+
+    async def go():
+        async with system_session() as conn:
+            user_id = await auth.create_user(conn, email, PASSWORD)
+            if role:
+                await conn.execute(
+                    text("insert into loreos.memberships (user_id, workspace_id, role) values (:u, :w, :r)"),
+                    {"u": user_id, "w": workspace_id, "r": role},
+                )
+            return user_id, await auth.create_session(conn, user_id)
+
+    user_id, token = asyncio.run(go())
+    client = app_client(origin=ORIGIN)
+    client.cookies.set(auth.SESSION_COOKIE, token)
+    return SimpleNamespace(id=user_id, email=auth.normalize_email(email), password=PASSWORD, client=client)
+
+
+def make_key(workspace_id) -> SimpleNamespace:
+    """A secret key for workspace_id. .client sends it as a Bearer, with no Origin and no cookie."""
+
+    async def go():
+        async with system_session() as conn:
+            return await auth.create_key(conn, workspace_id, "test key")
+
+    key_id, key = asyncio.run(go())
+    return SimpleNamespace(id=key_id, key=key, client=app_client(authorization=f"Bearer {key}"))
+
+
+@pytest.fixture
+def client(clean):
+    """No credentials, with a same-host Origin."""
+    return app_client(origin=ORIGIN)
+
+
+@pytest.fixture
+def owner(clean):
+    return make_user("owner@example.com", "owner")
+
+
+@pytest.fixture
+def member(clean):
+    return make_user("member@example.com", "member")
+
+
+@pytest.fixture
+def key_client(clean):
+    """A Bearer key for the default workspace, with no Origin and no cookie."""
+    return make_key(DEFAULT_WORKSPACE_ID).client
