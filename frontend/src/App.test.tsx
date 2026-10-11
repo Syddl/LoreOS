@@ -3,8 +3,12 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import App from "@/App";
 
+// /api/me gets `body` (and so does every call when status is an error); the screens' list calls get [].
 function respondWith(body: unknown, status = 200) {
-  const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
+  const fetchMock = vi.fn(async (url: string) => {
+    const reply = status !== 200 || url === "/api/me" ? body : [];
+    return new Response(JSON.stringify(reply), { status, headers: { "Content-Type": "application/json" } });
+  });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
