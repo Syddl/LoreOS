@@ -61,7 +61,10 @@ async function askQuestion(response: Response) {
 
 test("[4] opens citation 4's filename and passage, whatever its position in the list", async () => {
   const { fetchMock, user } = await askQuestion(json(ANSWER));
-  await user.click(await screen.findByRole("button", { name: "Source 4" }));
+  // In answer order: [2] is the first marker and [4] the second, so a lookup by position cannot pass.
+  const markers = await screen.findAllByRole("button", { name: /^Source \d+$/ });
+  expect(markers.map((m) => m.getAttribute("aria-label"))).toEqual(["Source 2", "Source 4"]);
+  await user.click(screen.getByRole("button", { name: "Source 4" }));
   const panel = await screen.findByRole("dialog");
   expect(within(panel).getByText("policy.pdf")).toBeInTheDocument();
   expect(within(panel).getByText("page 7")).toBeInTheDocument();
