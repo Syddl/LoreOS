@@ -32,11 +32,11 @@ Every new table lives in the `loreos` schema, beside P1's (decision 0002).
 | `loreos_app` | Postgres role | migration | `NOLOGIN`, no `BYPASSRLS`, owns nothing. `USAGE` on schema `loreos` and on the schema holding `vector`; `SELECT, INSERT, UPDATE, DELETE` on `documents` and `chunks` only. Created only if absent (roles are cluster-wide); `grant loreos_app to current_user with set true`. |
 | RLS policies | migration | | On `documents` and `chunks`: rows visible and writable only when `workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid`. Auth tables get no policy; `loreos_app` has no rights on them. |
 | `workspace_session(workspace_id)` | async context manager | `backend/loreos/db.py` | Also runs `select set_config('role','loreos_app',true), set_config('app.workspace_id',:w,true)` in one round trip. Callers unchanged. |
-| `system_session()` | async context manager | `backend/loreos/db.py` | One transaction as the connecting role, with no role switch. The only callers: login, session and key lookup, signup's first-user check, invite accept, the workspace list, `rate_limit`, the worker's claim, `admin.py`, and the workspace lookup and creation P2 already does through `engine()`. |
+| `system_session()` | async context manager | `backend/loreos/db.py` | One transaction as the connecting role, with no role switch. The only callers: login, session and key lookup, signup's first-user check, invite accept, the workspace, member, invite and key routes, `rate_limit`, the worker's claim and failure records, `admin.py`, `verify_rls`, the health check, and the workspace lookup and creation P2 already does through `engine()`. A source scan pins this list. These routes have no RLS behind them, so every statement carries `workspace_id = :w`. |
 | `ingest.enqueue(session, workspace_id, filename, data)` and `ingest.enqueue_url(session, workspace_id, url)` | functions | `backend/loreos/ingest.py` | Store a `pending` document and return it. A URL document's `sha256` is the hash of the normalised URL, so the same URL is queued again. `ingest.ingest()` stays inline for the evaluation and `paid:smoke`. |
 | `rate_limit(bucket, limit, window_s) -> (allowed, retry_after)` | function | `backend/loreos/ratelimit.py` | One upsert per call; P6 reuses it. |
 | `current_member(request, workspace_id)` | FastAPI dependency | `backend/loreos/auth.py` | Session cookie or `Authorization: Bearer lo_sk_...`; returns user or key, workspace and role; 401 or 404. |
-| Auth routes | routes | `backend/loreos/routes/auth.py` | `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/me`, `POST /api/invites/{token}/accept` |
+| Auth routes | routes | `backend/loreos/routes/auth.py` | `POST /api/auth/signup`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/me`, `POST /api/invites/accept` (the token in the body, never in a URL path) |
 | Workspace routes | routes | `backend/loreos/routes/workspaces.py` | `GET, POST /api/workspaces`; under `/api/workspaces/{id}`: `members`, `invites`, `api-keys` (owner only) |
 | Document and ask routes | routes | `backend/loreos/routes/documents.py` | Under `/api/workspaces/{id}`: `POST documents` (file or `{url}`), `GET documents`, `GET documents/{doc}`, `DELETE documents/{doc}` (owner), `POST ask`. They replace P1's unscoped routes. `ask` returns every `Answer` field through one mapping (`text` as `answer`), so P3's `retrieval_mode` passes through. |
 | `GET /api/health` | route | `backend/loreos/main.py` | 200 when the database answers; the compose healthcheck. |
@@ -61,10 +61,10 @@ Isolation
 
 Accounts and login
 4. Signup is open only while no user exists. The first account becomes owner of a new workspace and of P1's default workspace. Evaluation workspaces (`eval-*`) stay ownerless and are never listed. Two concurrent first signups are serialised with `pg_advisory_xact_lock`.
-5. An owner creates an invite link: single use, expires after 7 days, stored as a hash. The client builds the link from `window.location.origin`. Accepting it while logged out creates the account; logged in, it adds the membership.
+5. An owner creates an invite link: single use, expires after 7 days, stored as a hash. The client builds the link from `window.location.origin` as `/invite#<token>`. The fragment never reaches the server or its access log. Accepting it while logged out creates the account; logged in, it adds the membership.
 6. Passwords are hashed with argon2id (`argon2-cffi`) and must be at least 12 characters. Unknown email and wrong password get the same error and take comparable time.
 7. Login sets an `HttpOnly`, `SameSite=Lax` session cookie holding 32 random bytes. It is `Secure` when the request arrived over HTTPS, as uvicorn reports it from `--proxy-headers` and `FORWARDED_ALLOW_IPS`. The database keeps only its hash; it expires after 14 days; logout deletes it.
-8. Login is limited to 5 failures per email and 20 per client IP per 15 minutes; past that it gets 429 with `Retry-After`. Login reads both buckets before verifying and adds to them only on a failure.
+8. Login is limited to 5 failures per email and 20 per client IP per 15 minutes; past that it gets 429 with `Retry-After`. Login reserves a slot in both buckets before verifying, so parallel guesses cannot all pass, and refunds them on success, so only failures stay counted. The email bucket keys on the normalised email.
 9. The api answers only the hosts in `ALLOWED_HOSTS`. Every `POST`, `PUT`, `PATCH` or `DELETE` without an `Authorization: Bearer` key must carry an `Origin` whose host and port equal the request's `Host`, or it gets 403. That covers cookie-authenticated writes, plus login, signup and invite acceptance, which also closes login CSRF. A missing `Origin` is refused too; P1's rule passed it. A Bearer request is authenticated by its key alone and never falls back to the cookie.
 10. Roles: a member uploads, lists and asks; an owner also deletes documents and manages members, invites and API keys.
 
@@ -132,7 +132,7 @@ None. The `test_auth.py` row pins that no environment read disables auth or isol
 - Retrieval, fusion, rerank and evaluation files: P3 owns them in this window.
 - Publishable keys, allowed domains and the widget: P6. `rate_limit` is built here for login and reused there.
 - Roles beyond owner and member; email sending; password reset by email; OAuth or SSO; the crawler; caching; Redis.
-- The connection pool: `db.engine()` keeps NullPool, with its connect retry (`p2-baseline`, `5f3e7a8`). The api and the worker cap their own concurrency instead, and the plan records the pooler's client limit.
+- The connection pool: `db.engine()` keeps NullPool, with its connect retry (`p2-baseline`, `5f3e7a8`). Concurrency is capped by uvicorn's `--limit-concurrency` and by a worker that handles one document at a time. The live row records the pooler's client limit against that peak.
 
 ## Revised against P1 and P2
 
@@ -158,7 +158,7 @@ None. The `test_auth.py` row pins that no environment read disables auth or isol
 | Signup adopts "every workspace with no owner" | Only P1's default workspace | P2 creates ownerless `eval-*` workspaces, and P3 adds more. |
 | "A missing key stops the service" | Both keys are read at startup | Settings are read when used, so the api would start and fail at the first upload. |
 | "8-character prefix" | 8 characters of the random part | `lo_sk_` plus 2 characters identifies nothing. |
-| Login limited to 5 failures | Buckets read before verifying, incremented only on failure | `rate_limit` counts every call, so successful logins would otherwise fill the bucket. |
+| Login limited to 5 failures | A slot reserved before verifying, refunded on success; the bucket keyed on the normalised email | `rate_limit` counts every call, so successes are refunded. Reading the buckets first and counting afterwards let a burst of parallel guesses through (plan review, finding 1). |
 | `db:verify-rls` as a check | `python -m loreos.verify_rls` behind a root script | A `scripts/check-*.mjs` file is pulled into CI by the harness glob, and CI has no `DATABASE_URL`. |
 | testdb as superuser | testdb's init creates a non-superuser owner role (`LOGIN CREATEROLE BYPASSRLS`), and conftest connects as it | A superuser can `SET ROLE` and use every schema, so missing grants pass the tests and fail on Supabase. |
 | The worker starts unasked | `paid:worker`, and the guard asks on the worker and on `docker compose up` | It embeds every pending row through OpenAI. Operator decision, 2026-10-11. |

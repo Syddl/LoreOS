@@ -17,12 +17,18 @@ The single carrier of state between sessions. Update it before a session ends; t
     - Origin is required on every write without a Bearer key, login included. Spec behaviour 9 now says so;
     - the worker checks the grants at startup, a stop releases its claim, and `MAX_CONNECTIONS` is 10.
   - The fifth, verifying the live rows early against a throwaway Supabase project, is left to the operator. The default is the merge window.
-- Step 5, plan review by execution: next, by an independent reviewer.
-- P3 needs decision 0007 (tqdm) and the shared-file rules in the spec's Risks. P3 starts from `main`, so it reads them from this branch until P4 merges.
+- Step 5, plan review by execution:
+  - **First review**: "fix then re-review", with 6 majors, 10 minors and 3 nits ([reviews/plan.md](reviews/plan.md)). The reviewer ran `check:all` green at `a05f789`.
+  - **Revision**: answers every finding. The plan's last section maps each one to its change.
+  - **Re-review**: next.
+- **For P3's spec revision**, which starts from `main`, so it reads these from this branch until P4 merges:
+  - decision 0007, for tqdm;
+  - the shared-file rules in this spec's Risks;
+  - a requirement change: P3 behaviour 7 loads the reranker in the api only, not the worker, which never searches.
 
 ## Next step
 
-Step 5: an independent reviewer reviews `plan.md` by execution, running the checks it names against this tree, and writes `reviews/plan.md`.
+Step 5 re-review: a fresh independent reviewer checks the revised `plan.md` against `reviews/plan.md`'s findings, and its verdict is appended to `reviews/plan.md`.
 
 ## Blockers
 
