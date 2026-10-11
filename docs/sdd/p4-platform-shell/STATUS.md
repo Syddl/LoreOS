@@ -82,6 +82,23 @@ The single carrier of state between sessions. Update it before a session ends; t
       - a failure outside `run_stages` (the lock select, the session setup, the commit) is recorded as stage `store`.
     - **3.3 note:** the `llm.embed` edit changes the evaluation workspace key, as the plan's merge timing expects.
   - **Window D closed:** `check:all` PASS at `f32f211` (ledger).
+  - **Window E1 and E2**, each implemented in its own worktree, cherry-picked, with a report under `tasks/`. Every redproof PASS.
+
+    | Task | What it adds | Tests |
+    |---|---|---|
+    | 4.1 | the app shell: hosts, Origin (Bearer only), `BodyLimit`, health, a string-detail 422, the UI fallback | 98 |
+    | 4.2 | signup, login (reserve and refund), logout, me, invite accept | 99 in `test_auth.py` |
+    | 4.3 | workspace, member, invite and key routes, with cross-workspace guards and the last-owner lock | 32 |
+    | 4.4 | document and ask routes under a workspace; P1's tests moved and `test_local_only.py` deleted; the brief's isolation test through the routes | 72 |
+
+    - **4.1 found and fixed** a path in the UI fallback that leaked credentials on Windows. `/%5c%5chost%5cshare%5cx` decoded to a UNC path, so `resolve()` opened an SMB connection, and the dev account's NTLM hash could leak from any web page. The fallback now refuses rooted, drive and `..` paths before touching the filesystem, with a test.
+    - **4.2 and 4.3 agree:** `Me` and `GET /api/workspaces` both hide `eval-*`, and both refuse a blank, long or `eval-` name.
+  - **Window E2 closed:** `check:all` PASS at `a929684` (ledger).
+  - **Simplifications for the fix wave**, from the E2 reports:
+    - **Duplicated name rules:** `EVAL_NAME` and the `eval-` check live in both `routes/auth.py` and `routes/workspaces.py`. Move the check into `Name` and have `list_workspaces` call `workspaces_of`.
+    - **Private helper used across modules:** `auth._sha256` is called from both route files; make it public.
+    - **Duplicated timeout:** `'2s'` sits in both `ingest.py` and `routes/documents.py`; make it one `LOCK_TIMEOUT` constant.
+    - **Signup lands in Default:** the oldest workspace comes first in the list, so a new user lands in Default rather than their own new workspace.
   - **Notes for later tasks**, from the window C reports:
     - **4.1:** install a handler for FastAPI's `RequestValidationError` that returns `{detail: "<message>"}` as a string. The default 422 returns a list, which `api.ts` shows as the status text (5.2).
     - **4.4:** `set local lock_timeout` lasts for the caller's whole transaction. The URL route's session should do nothing after `enqueue_url` (3.1).
@@ -98,7 +115,10 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Window E1: 4.1, the app shell, by an implementer. It removes P1's routes and adds the routers, the Origin rule (Bearer only), `BodyLimit`, health, the UI fallback, and a string-detail 422 handler. Between E1 and E2, the P1 route tests stay red, as the plan says. Then E2 (4.2, 4.3, 4.4) and E3 (4.5).
+Window E3:
+1. 4.5, the no-off-switch pin, by an implementer. The main session runs its `ingest.py` mutation.
+2. Then the simplifications listed above.
+3. Then window F: 6.1 (image, compose, check:compose) and 6.2 (docs), both in the main session.
 
 ## Blockers
 
@@ -115,6 +135,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 |---|---|---|---|---|---|---|
 | 2026-10-11 (by hand, window A) | p4-platform-shell | 47ce731 | `npm run check:all` | PASS | 117 s | hooks 395/395, agent-hooks 7/7, backend 371 passed and 2 skipped, licenses 48/48, spend 123/123. Not covered: Supabase (`db:verify-rls` live, phase 7); CI on Linux; the unpushed tip |
 | 2026-10-11 (by hand, window B) | p4-platform-shell | e13614f | `npm run check:all` | PASS | 168 s | hooks 395/395, agent-hooks 7/7, backend 454 passed and 2 skipped, licenses 48/48 (backend only until 5.6), spend 123/123, frontend typecheck, test and build. Not covered: the same as window A, and the frontend tree's licenses (5.6) |
+| 2026-10-11 (by hand, window E2) | p4-platform-shell | a929684 | `npm run check:all` | PASS | 301 s | hooks 395/395, agent-hooks 7/7, backend 675 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 36 tests, typecheck and build. Not covered: the same as window A |
 | 2026-10-11 (by hand, window D) | p4-platform-shell | f32f211 | `npm run check:all` | PASS | 192 s | hooks 395/395, agent-hooks 7/7, backend 523 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 36 tests, typecheck and build. Not covered: the same as window A; a real SIGTERM to the worker |
 | 2026-10-11 (by hand, window C) | p4-platform-shell | 817e257 | `npm run check:all` | PASS | 173 s | hooks 395/395, agent-hooks 7/7, backend 475 passed and 2 skipped, licenses 48/48 backend and 84/84 frontend, spend 123/123, frontend 18 tests, typecheck and build. Not covered: the same as window A |
 
