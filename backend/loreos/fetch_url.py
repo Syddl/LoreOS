@@ -20,6 +20,7 @@ MAX_BYTES = 5 * 1024 * 1024
 TIMEOUT_S = 10
 MAX_REDIRECTS = 5
 DEFAULT_PORTS = {"http": 80, "https": 443}
+NAT64 = ipaddress.ip_network("64:ff9b::/96")  # RFC 6052: ipaddress calls it global whatever IPv4 address it carries
 KINDS = {"text/html": "html", "application/xhtml+xml": "html", "text/plain": "txt", "application/pdf": "pdf"}
 
 Resolve = Callable[[str, int], Awaitable[list[str]]]
@@ -101,11 +102,18 @@ async def _getaddrinfo(host: str, port: int) -> list[str]:
 async def _checked(host: str, port: int, resolve: Resolve) -> str:
     """The first address of host, once every address is public. No address at all is refused too."""
     addresses = [getattr(a, "ipv4_mapped", None) or a for a in map(ipaddress.ip_address, await resolve(host, port))]
-    bad = [str(a) for a in addresses if not a.is_global or a.is_multicast]
+    bad = [str(a) for a in addresses if not _public(a)]
     if bad or not addresses:
         found = ", ".join(bad) or "no address"
         raise Refused(f"{host} resolves to {found}; only pages on public addresses can be imported")
     return str(addresses[0])
+
+
+def _public(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Global and not multicast. A NAT64 address is judged by the IPv4 address it carries; 6to4 and Teredo are not global."""
+    if address in NAT64:
+        address = ipaddress.IPv4Address(int(address) & 0xFFFFFFFF)
+    return address.is_global and not address.is_multicast
 
 
 class _Pinned(httpcore2.AnyIOBackend):
