@@ -65,7 +65,7 @@ Accounts and login
 6. Passwords are hashed with argon2id (`argon2-cffi`) and must be at least 12 characters. Unknown email and wrong password get the same error and take comparable time.
 7. Login sets an `HttpOnly`, `SameSite=Lax` session cookie holding 32 random bytes. It is `Secure` when the request arrived over HTTPS, as uvicorn reports it from `--proxy-headers` and `FORWARDED_ALLOW_IPS`. The database keeps only its hash; it expires after 14 days; logout deletes it.
 8. Login is limited to 5 failures per email and 20 per client IP per 15 minutes; past that it gets 429 with `Retry-After`. Login reads both buckets before verifying and adds to them only on a failure.
-9. The api answers only the hosts in `ALLOWED_HOSTS`. A cookie-authenticated `POST`, `PUT`, `PATCH` or `DELETE` must carry an `Origin` whose host and port equal the request's `Host`, or it gets 403. A missing `Origin` is refused too. P1's rule passed it.
+9. The api answers only the hosts in `ALLOWED_HOSTS`. Every `POST`, `PUT`, `PATCH` or `DELETE` without an `Authorization: Bearer` key must carry an `Origin` whose host and port equal the request's `Host`, or it gets 403. That covers cookie-authenticated writes, plus login, signup and invite acceptance, which also closes login CSRF. A missing `Origin` is refused too; P1's rule passed it. A Bearer request is authenticated by its key alone and never falls back to the cookie.
 10. Roles: a member uploads, lists and asks; an owner also deletes documents and manages members, invites and API keys.
 
 API keys
