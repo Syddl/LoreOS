@@ -131,10 +131,14 @@ export function Shell({ workspaceId, settings }: { workspaceId: string | null; s
   async function onLogout() {
     try {
       await logout();
-      navigate("/login");
     } catch (e) {
-      setError(errorText(e));
+      // A 401 means the session had already expired: that is logged out too.
+      if (!(e instanceof ApiError && e.status === 401)) {
+        setError(errorText(e));
+        return;
+      }
     }
+    navigate("/login");
   }
 
   if (!account || landing) {

@@ -7,7 +7,12 @@ import { AuthPage, Field, FormError } from "@/screens/Login";
 
 // The link is /invite#<token>: a fragment never reaches the server, so no access log holds a live token.
 export function Invite() {
-  const token = window.location.hash.slice(1);
+  // Read once into state: the effect below empties the hash, and accept still needs the token.
+  const [token] = useState(() => window.location.hash.slice(1));
+  // Replace the history entry without the fragment, so the back button and session history never hold the token.
+  useEffect(() => {
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, []);
   // undefined while loading, null when logged out
   const [current, setCurrent] = useState<Me | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);

@@ -93,6 +93,21 @@ test("a logged-out invite accept posts the token from the hash with an email and
   expect(JSON.parse(init?.body as string)).toEqual({ token: "tok-123", email: "ada@example.com", password: "correct horse battery" });
 });
 
+test("the invite drops the token from the address bar once read, and accept still posts it", async () => {
+  window.history.replaceState(null, "", "/invite#tok");
+  const fetchMock = mockFetch(json({ detail: "not logged in" }, 401), json({ ...ME, workspaces: [ME.workspaces[1]] }, 201));
+  const user = userEvent.setup();
+  render(<Invite />);
+  // replaceState swaps the current history entry, so /invite#tok is in no entry the back button reaches.
+  expect(window.location.hash).toBe("");
+  expect(window.location.pathname).toBe("/invite");
+  await user.type(await screen.findByLabelText("Email"), "ada@example.com");
+  await user.type(screen.getByLabelText("Password"), "correct horse battery");
+  await user.click(screen.getByRole("button", { name: "Create account and join" }));
+  await waitFor(() => expect(window.location.pathname).toBe("/w/ws-2"));
+  expect(JSON.parse(fetchMock.mock.calls[1]![1]?.body as string)).toEqual({ token: "tok", email: "ada@example.com", password: "correct horse battery" });
+});
+
 test("a logged-in invite accept posts only the token and opens the joined workspace", async () => {
   window.history.replaceState(null, "", "/invite#tok-123");
   const before = { ...ME, workspaces: [ME.workspaces[0]] };
