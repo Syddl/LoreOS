@@ -1,6 +1,10 @@
+import asyncio
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+
 import pytest
 
-from loreos import smoke
+from loreos import llm, smoke, verify_rls
 
 
 @pytest.fixture
@@ -48,3 +52,37 @@ def test_no_argument_runs_the_paid_flow(spy, monkeypatch):
     monkeypatch.delenv("npm_config_dry_run", raising=False)
     assert smoke.cli([]) == 0
     assert spy == ["paid"]
+
+
+@pytest.fixture
+def listed(monkeypatch):
+    """Replace llm.client; the list records each models listing, the preflight's first call to OpenAI."""
+    calls: list[str] = []
+
+    async def list_models():
+        calls.append("models")
+
+    @asynccontextmanager
+    async def client():
+        yield SimpleNamespace(models=SimpleNamespace(list=list_models))
+
+    monkeypatch.setattr(llm, "client", client)
+    return calls
+
+
+def test_preflight_stops_on_a_missing_grant_before_calling_openai(db, listed, monkeypatch):
+    missing = "loreos_app lacks USAGE on schema extensions"
+
+    async def problems(conn):
+        return [missing]
+
+    monkeypatch.setattr(verify_rls, "problems", problems)
+    with pytest.raises(SystemExit) as stopped:
+        asyncio.run(smoke.preflight())
+    assert missing in str(stopped.value) and "run npm run db:verify-rls" in str(stopped.value)
+    assert listed == []
+
+
+def test_preflight_with_the_grants_in_place_reaches_openai(db, listed):
+    asyncio.run(smoke.preflight())
+    assert listed == ["models"]

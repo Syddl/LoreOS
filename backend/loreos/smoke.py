@@ -1,8 +1,9 @@
 """The real slice end to end: npm run paid:smoke (python -m loreos.smoke). Costs a few cents.
 
-Preflight before any paid call: DATABASE_URL connects, the schema is at the migration head, and
-OPENAI_API_KEY is set and accepted (listing models is free). Then, in a throwaway workspace: one
-Markdown upload, one answerable and one unanswerable question, printed with their citations. The
+Preflight before any paid call: DATABASE_URL connects, the schema is at the migration head, the
+db:verify-rls assertions hold, and OPENAI_API_KEY is set and accepted (listing models is free).
+Then, in a throwaway workspace: one Markdown upload, one answerable and one unanswerable question,
+printed with their citations. The
 workspace is deleted at the end, pass or fail. Exit 0 only when the answerable question is cited
 and the unanswerable one is refused.
 """
@@ -18,7 +19,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
-from loreos import answering, ingest, llm, settings
+from loreos import answering, ingest, llm, settings, verify_rls
 from loreos.db import engine, workspace_session
 
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
@@ -43,10 +44,14 @@ async def preflight() -> None:
     try:
         async with engine().connect() as conn:
             current = await conn.scalar(text("select version_num from loreos.alembic_version"))
+            if current != head:
+                raise SystemExit(f"preflight: the database is at migration {current} and the code at {head}; run npm run db:migrate")
+            found = await verify_rls.problems(conn)
     except Exception as e:
-        raise SystemExit(f"preflight: cannot read the schema version ({type(e).__name__}: {e}); check DATABASE_URL, then run npm run db:migrate") from e
-    if current != head:
-        raise SystemExit(f"preflight: the database is at migration {current} and the code at {head}; run npm run db:migrate")
+        raise SystemExit(f"preflight: cannot read the schema version or the grants ({type(e).__name__}: {e}); check DATABASE_URL, then run npm run db:migrate") from e
+    if found:
+        listing = "\n  ".join(found)
+        raise SystemExit(f"preflight: workspace isolation does not hold:\n  {listing}\nfix each, then run npm run db:verify-rls")
     try:
         async with llm.client() as client:
             await client.models.list()
