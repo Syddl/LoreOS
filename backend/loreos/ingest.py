@@ -18,6 +18,8 @@ from loreos.retrieval import vector_literal
 log = logging.getLogger("loreos.ingest")
 
 MAX_ERROR_CHARS = 1000
+# The longest a request waits on the worker's row lock before giving up; it lasts the caller's whole transaction.
+LOCK_TIMEOUT = text("set local lock_timeout = '2s'")
 # Back to the queue as if new. The worker may hold the row lock for minutes, hence the lock_timeout on URL re-queues.
 REQUEUE = text(
     "update loreos.documents set status = 'pending', attempts = 0, error = null, next_attempt_at = null, "
@@ -106,7 +108,7 @@ async def enqueue_url(session: AsyncConnection, workspace_id: uuid.UUID, url: st
     url = fetch_url.normalise(url)
     existing = await find_by_sha(session, workspace_id, sha256(url.encode()))
     if existing:
-        await session.execute(text("set local lock_timeout = '2s'"))
+        await session.execute(LOCK_TIMEOUT)
         await session.execute(REQUEUE, {"w": workspace_id, "d": existing.id})
         return await get_document(session, workspace_id, existing.id)
     document_id = await session.scalar(

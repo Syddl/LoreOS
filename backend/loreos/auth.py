@@ -101,7 +101,8 @@ async def create_user(conn: AsyncConnection, email: str, password: str) -> uuid.
 # Sessions and keys
 
 
-def _sha256(token: str) -> str:
+def token_hash(token: str) -> str:
+    """What the database keeps of a session token, an API key or an invite token: its sha256, never the token."""
     return hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -113,7 +114,7 @@ async def create_session(conn: AsyncConnection, user_id: uuid.UUID) -> str:
             "insert into loreos.sessions (id, user_id, expires_at) "
             "values (:id, :u, now() + make_interval(days => :days))"
         ),
-        {"id": _sha256(token), "u": user_id, "days": SESSION_DAYS},
+        {"id": token_hash(token), "u": user_id, "days": SESSION_DAYS},
     )
     return token
 
@@ -126,14 +127,14 @@ async def session_user(conn: AsyncConnection, token: str) -> User | None:
                 "select u.id, u.email from loreos.sessions s join loreos.users u on u.id = s.user_id "
                 "where s.id = :id and s.expires_at > now()"
             ),
-            {"id": _sha256(token)},
+            {"id": token_hash(token)},
         )
     ).first()
     return User(row.id, row.email) if row else None
 
 
 async def delete_session(conn: AsyncConnection, token: str) -> None:
-    await conn.execute(text("delete from loreos.sessions where id = :id"), {"id": _sha256(token)})
+    await conn.execute(text("delete from loreos.sessions where id = :id"), {"id": token_hash(token)})
 
 
 async def create_key(conn: AsyncConnection, workspace_id: uuid.UUID, name: str) -> tuple[uuid.UUID, str]:
@@ -146,7 +147,7 @@ async def create_key(conn: AsyncConnection, workspace_id: uuid.UUID, name: str) 
                 "insert into loreos.api_keys (workspace_id, kind, name, prefix, key_hash) "
                 "values (:w, 'secret', :n, :p, :h) returning id"
             ),
-            {"w": workspace_id, "n": name, "p": body[:8], "h": _sha256(key)},
+            {"w": workspace_id, "n": name, "p": body[:8], "h": token_hash(key)},
         )
     ).scalar_one()
     return key_id, key
@@ -167,7 +168,7 @@ async def _key_member(authorization: str, workspace_id: uuid.UUID) -> Member:
         row = (
             await conn.execute(
                 text("select id, workspace_id from loreos.api_keys where key_hash = :h and revoked_at is null"),
-                {"h": _sha256(key)},
+                {"h": token_hash(key)},
             )
         ).first()
         if row is None:

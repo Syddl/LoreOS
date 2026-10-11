@@ -10,18 +10,18 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel
 from sqlalchemy import text
 
 from loreos import auth
 from loreos.auth import Member, User, current_user, require_owner
 from loreos.db import system_session
+from loreos.workspaces import Name, name_problem, workspaces_of
 
 INVITE_DAYS = 7
 
 router = APIRouter(prefix="/api/workspaces")
 Owner = Annotated[Member, Depends(require_owner)]
-Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
 
 class Named(BaseModel):
@@ -30,22 +30,15 @@ class Named(BaseModel):
 
 @router.get("")
 async def list_workspaces(user: Annotated[User, Depends(current_user)]) -> list[dict]:
-    """The user's workspaces; evaluation workspaces (eval-*) never, even with a membership."""
+    """The user's workspaces; evaluation workspaces never, even with a membership."""
     async with system_session() as conn:
-        rows = await conn.execute(
-            text(
-                "select w.id, w.name, m.role from loreos.memberships m join loreos.workspaces w on w.id = m.workspace_id "
-                "where m.user_id = :u and w.name not like 'eval-%' order by w.created_at, w.name"
-            ),
-            {"u": user.id},
-        )
-        return [dict(row._mapping) for row in rows]
+        return await workspaces_of(conn, user.id)
 
 
 @router.post("", status_code=201)
 async def create_workspace(body: Named, user: Annotated[User, Depends(current_user)]) -> dict:
-    if body.name.startswith("eval-"):
-        raise HTTPException(422, "names starting with eval- are kept for evaluation workspaces; choose another name")
+    if problem := name_problem(body.name):
+        raise HTTPException(422, problem)
     async with system_session() as conn:
         workspace_id = (
             await conn.execute(text("insert into loreos.workspaces (name) values (:n) returning id"), {"n": body.name})
@@ -113,7 +106,7 @@ async def create_invite(member: Owner) -> dict:
                     "insert into loreos.invites (token_hash, workspace_id, created_by, expires_at) "
                     "values (:h, :w, :u, now() + make_interval(days => :days)) returning expires_at"
                 ),
-                {"h": auth._sha256(token), "w": member.workspace_id, "u": member.user_id, "days": INVITE_DAYS},
+                {"h": auth.token_hash(token), "w": member.workspace_id, "u": member.user_id, "days": INVITE_DAYS},
             )
         ).scalar_one()
     return {"token": token, "expires_at": expires_at}

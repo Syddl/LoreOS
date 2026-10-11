@@ -110,7 +110,7 @@ async def delete_document(document_id: uuid.UUID, member: Owner) -> Response:
     """The document and, by cascade, its chunks. Waits at most 2 s for the worker's row lock, then 409."""
     with busy_is_409():
         async with workspace_session(member.workspace_id) as session:
-            await session.execute(text("set local lock_timeout = '2s'"))
+            await session.execute(ingest.LOCK_TIMEOUT)
             deleted = await session.scalar(
                 text("delete from loreos.documents where id = :d and workspace_id = :w returning id"),
                 {"d": document_id, "w": member.workspace_id},

@@ -6,7 +6,6 @@ an Authorization header without a preflight this api never answers.
 """
 
 import math
-import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -17,8 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from loreos import auth, ratelimit
 from loreos.db import system_session
-from loreos.routes.workspaces import Name
-from loreos.workspaces import DEFAULT_WORKSPACE_ID
+from loreos.workspaces import DEFAULT_WORKSPACE_ID, Name, name_problem, workspaces_of
 
 router = APIRouter()
 
@@ -33,13 +31,7 @@ SIGNUP_CLOSED = "signup is closed because this LoreOS already has an account; as
 INVITE_GONE = "this invite link is unknown, used or expired; ask the workspace owner for a new one"
 EMAIL_TAKEN = "an account with this email already exists; log in, then open the invite link again"
 NEED_ACCOUNT = "send an email and a password to create an account, or log in first"
-EVAL_NAME = "names starting with eval- are kept for evaluation workspaces; choose another name"  # as POST /api/workspaces
 
-# The same list as GET /api/workspaces: evaluation workspaces (eval-*) never, even with a membership.
-WORKSPACES_OF = (
-    "select w.id, w.name, m.role from loreos.memberships m join loreos.workspaces w on w.id = m.workspace_id "
-    "where m.user_id = :u and w.name not like 'eval-%' order by w.created_at, w.name"
-)
 USE_INVITE = (
     "update loreos.invites set used_at = now() "
     "where token_hash = :h and used_at is null and expires_at > now() returning workspace_id"
@@ -64,12 +56,6 @@ class Accept(BaseModel):
     password: str | None = None
 
 
-async def workspaces_of(conn: AsyncConnection, user_id: uuid.UUID) -> list[dict]:
-    """[{id, name, role}] for each membership, oldest workspace first, as GET /api/workspaces lists them."""
-    rows = await conn.execute(text(WORKSPACES_OF), {"u": user_id})
-    return [{"id": row.id, "name": row.name, "role": row.role} for row in rows]
-
-
 async def me_of(conn: AsyncConnection, user: auth.User) -> dict:
     return {"user": {"id": user.id, "email": user.email}, "workspaces": await workspaces_of(conn, user.id)}
 
@@ -79,8 +65,8 @@ async def signup(body: Signup, request: Request, response: Response) -> dict:
     """The first account only: owner of a new workspace and of Default. The lock serialises two first signups."""
     if problem := auth.password_problem(body.password):
         raise HTTPException(422, problem)
-    if body.workspace_name.startswith("eval-"):
-        raise HTTPException(422, EVAL_NAME)
+    if problem := name_problem(body.workspace_name):
+        raise HTTPException(422, problem)
     async with system_session() as conn:
         await conn.execute(text("select pg_advisory_xact_lock(hashtext('loreos.signup'))"))
         if (await conn.execute(text("select exists (select from loreos.users)"))).scalar():
@@ -154,7 +140,7 @@ async def accept_invite(body: Accept, request: Request, response: Response) -> d
             raise
         user = None
     async with system_session() as conn:
-        workspace_id = (await conn.execute(text(USE_INVITE), {"h": auth._sha256(body.token)})).scalar()
+        workspace_id = (await conn.execute(text(USE_INVITE), {"h": auth.token_hash(body.token)})).scalar()
         if workspace_id is None:
             raise HTTPException(404, INVITE_GONE)
         token = None
