@@ -107,6 +107,21 @@ The single carrier of state between sessions. Update it before a session ends; t
     - It gains rows for the unpruned auth tables, the shared login IP bucket, the missing connection cap, and the file-versus-URL hash collision.
     - Its spend-guard row names the worker and compose spellings.
     - Decision 0002 points at 0007.
+  - **Step 9, the whole-branch review** ([reviews/branch.md](reviews/branch.md), at `313de88`): "fix then re-review", with 1 major, 9 minors and 4 nits. The review ran `check:all` and `check:compose`, both PASS.
+  - **Step 10, the fix wave.** Each fix is red first, and each redproof PASS (reports `tasks/fix-1` to `fix-4`):
+    - **FW1** (findings 1, 3, 7, 12): `verify_rls` now checks the policy exactly (permissive, `for all`, `loreos_app` only, the migration's condition) and that no other policy exists. It also confirms that a session for an unknown workspace sees 0 rows. The api runs it at startup. Request bodies are capped at 64 KB except uploads. The caller scan also watches `create_async_engine` and `database_url(`.
+    - **FW2** (finding 2): a systemic failure after a paid embedding counts as an attempt, so a document stops after 3 batches. A failure before the stages is labelled `lock`.
+    - **FW3** (finding 4): the cookie is `Secure` when the Origin is https.
+    - **FW4** (findings 13, 14): logout after expiry goes to `/login`, and the invite token leaves the browser history.
+    - **Main session** (`40baf17`):
+      - IPv4-compatible `::/96` addresses are judged by the IPv4 address they carry (finding 11, which was confirmed);
+      - `.dockerignore` excludes nested `.env` files (6);
+      - the check builds its own image tag, `loreos-check:local` (8);
+      - the worker restarts only on failure (9);
+      - an accurate last-owner 409 (5);
+      - the spec and KNOWN-GAPS follow the fixes (10).
+    - `e1fd29e`: one `verify_rls.isolation_problems()` for the api and the worker.
+    - `check:all` PASS and `check:compose` PASS at `e1fd29e` (ledger).
   - **Simplifications from the E2 reports**, done in `db83b17`, apart from the last:
     - **Duplicated name rules:** `EVAL_NAME` and the `eval-` check live in both `routes/auth.py` and `routes/workspaces.py`. Move the check into `Name` and have `list_workspaces` call `workspaces_of`.
     - **Private helper used across modules:** `auth._sha256` is called from both route files; make it public.
@@ -128,13 +143,11 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Steps 7 and 9:
-1. Run `npm run check:all` on the tip.
-2. Push `p4-platform-shell`, so CI runs the checks and compose jobs on Linux.
-3. Run the whole-branch review with an independent reviewer (security lens), then a fix wave if needed.
-4. Step 11 (claim-green) follows on the pushed tip.
+Step 9 re-review of the fix wave, by an independent reviewer.
 
-Pushing is outward-facing, so ask the operator first.
+If it passes, push `p4-platform-shell`, but only once the operator approves the push. CI then runs on Linux, and step 11 (claim-green) follows on the pushed tip.
+
+Phase 7, the live rows, waits for the merge window.
 
 ## Blockers
 
@@ -151,6 +164,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 |---|---|---|---|---|---|---|
 | 2026-10-11 (by hand, window A) | p4-platform-shell | 47ce731 | `npm run check:all` | PASS | 117 s | hooks 395/395, agent-hooks 7/7, backend 371 passed and 2 skipped, licenses 48/48, spend 123/123. Not covered: Supabase (`db:verify-rls` live, phase 7); CI on Linux; the unpushed tip |
 | 2026-10-11 (by hand, window B) | p4-platform-shell | e13614f | `npm run check:all` | PASS | 168 s | hooks 395/395, agent-hooks 7/7, backend 454 passed and 2 skipped, licenses 48/48 (backend only until 5.6), spend 123/123, frontend typecheck, test and build. Not covered: the same as window A, and the frontend tree's licenses (5.6) |
+| 2026-10-12 (by hand, after the fix wave) | p4-platform-shell | e1fd29e | `npm run check:all`; `npm run check:compose` | PASS; PASS | 323 s; 42 s | hooks 395/395, agent-hooks 7/7, backend 705 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 38 tests, typecheck and build; compose healthy, UI served, no `.env` in the image, worker running, image 93 MB. Not covered: Supabase (phase 7), CI on Linux (unpushed), a browser |
 | 2026-10-11 (by hand, window E2) | p4-platform-shell | a929684 | `npm run check:all` | PASS | 301 s | hooks 395/395, agent-hooks 7/7, backend 675 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 36 tests, typecheck and build. Not covered: the same as window A |
 | 2026-10-11 (by hand, window D) | p4-platform-shell | f32f211 | `npm run check:all` | PASS | 192 s | hooks 395/395, agent-hooks 7/7, backend 523 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 36 tests, typecheck and build. Not covered: the same as window A; a real SIGTERM to the worker |
 | 2026-10-11 (by hand, window C) | p4-platform-shell | 817e257 | `npm run check:all` | PASS | 173 s | hooks 395/395, agent-hooks 7/7, backend 475 passed and 2 skipped, licenses 48/48 backend and 84/84 frontend, spend 123/123, frontend 18 tests, typecheck and build. Not covered: the same as window A |
