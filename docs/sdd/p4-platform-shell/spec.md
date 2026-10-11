@@ -73,7 +73,7 @@ API keys
 12. A key reaches only its own workspace's document and ask routes. A key used on another workspace's path gets 404, and a key on member or key routes gets 403.
 
 Worker and ingestion
-13. An upload stores the document as `pending` and returns 202. A duplicate returns the stored document, as in P1. A failed duplicate is queued again with 202 and `attempts` reset to 0. Uploads are limited to 20 MB: bytes are counted as they arrive, so a chunked upload stops at the limit too.
+13. An upload stores the document as `pending` and returns 202. A duplicate returns the stored document, as in P1. A failed duplicate is queued again with 202 and `attempts` reset to 0. Uploads are limited to 20 MB: bytes are counted as they arrive, so a chunked upload stops at the limit too. Every other request body is limited to 64 KB, so login, signup and the JSON routes never parse a large body before authenticating (whole-branch review, finding 7).
 14. The worker polls every 2 s while idle. It claims the oldest due `pending` document, or a `processing` one whose lease ran out, with `FOR UPDATE SKIP LOCKED`, then sets `processing` and a 10-minute lease. The lease only recovers a crashed worker: the processing transaction holds the row lock, so no lease extension is needed. A lease that ran out counts as a transient failure, so a document that keeps killing the worker ends `failed`.
 15. Failures are classified before handling, by exception class, status and error code, never by message:
     - **Permanent** (unsupported type, parse error, no text, URL refused, HTTP 4xx from the fetched site, a DOCX over the unpacked-size cap) fails at once.
@@ -95,7 +95,7 @@ Worker and ingestion
     - The document's filename is the URL, which is what citations show. Submitting the same URL again fetches it again.
 
 Shell
-19. `docker compose up` with `DATABASE_URL` and `OPENAI_API_KEY` in `.env` runs migrations, then starts the api and the worker; the UI loads at `http://localhost:8000`. The api and the worker read both keys at startup and exit with a message naming any that is missing.
+19. `docker compose up` with `DATABASE_URL` and `OPENAI_API_KEY` in `.env` runs migrations, then starts the api and the worker; the UI loads at `http://localhost:8000`. The api and the worker read both keys at startup and exit with a message naming any that is missing. Both then run `verify_rls`, and refuse to start on any isolation problem.
 20. UI screens:
     - signup and login, and invite acceptance;
     - the workspace switcher and workspace creation;
@@ -111,7 +111,7 @@ Shell
 | # | Behaviour | Check | Expected | Does NOT exercise |
 |---|---|---|---|---|
 | 1-3 | Isolation (the brief's test) | `npm run check:backend`, `tests/test_isolation.py`, connected as a non-superuser owner role that testdb's init creates | Two workspaces with chunks. With A's key, list and ask return only A's ids. In A's session, `select count(*) from loreos.chunks` with no filter equals A's count; with no workspace set it is 0. `loreos_app` has `rolbypassrls = false`, owns no table and has no rights on the auth tables. | Supabase's own role attributes (next row) |
-| 1-3 | Isolation on Supabase | `npm run db:verify-rls` | The same role and policy assertions pass against `DATABASE_URL`. `pg_has_role(current_user,'loreos_app','SET')` is true, `loreos_app` has `USAGE` on `vector`'s schema, and `idle_in_transaction_session_timeout` is printed. Ledger row by hand. | |
+| 1-3 | Isolation on Supabase | `npm run db:verify-rls` | The same role and policy assertions pass against `DATABASE_URL`: <ul><li>exactly one permissive `for all` policy per table, for `loreos_app` only, with the migration's condition, and no other policy;</li><li>a session for an unknown workspace sees 0 rows;</li><li>`pg_has_role(current_user,'loreos_app','SET')` is true;</li><li>`loreos_app` has `USAGE` on `vector`'s schema.</li></ul>`idle_in_transaction_session_timeout` is printed. Ledger row by hand. | Postgres renders the expected condition as PG17 does, so a different rendering on Supabase reports a false problem, never a false pass |
 | 1 | Grants before spend | `tests/test_smoke.py` | `smoke.preflight()` stops, before any paid call, when `loreos_app` lacks `USAGE` on `vector`'s schema | |
 | 4-9 | Login | `tests/test_auth.py` | The second signup is refused. An invite is single use and expires. The cookie flags are set. The 6th failure gets 429. A foreign or missing `Origin` gets 403, and a host outside `ALLOWED_HOSTS` gets 400. | Browser cookie handling (manual row) |
 | pin | No off switch | `tests/test_auth.py` | No environment key makes an unauthenticated request succeed on any workspace route | |

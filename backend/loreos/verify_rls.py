@@ -132,6 +132,12 @@ async def problems(conn: AsyncConnection) -> list[str]:
     return found
 
 
+async def isolation_problems() -> list[str]:
+    """problems() on a session of its own: what the api and the worker check before they start."""
+    async with system_session() as conn:
+        return await problems(conn)
+
+
 async def idle_timeout(conn: AsyncConnection) -> str:
     return await conn.scalar(text("show idle_in_transaction_session_timeout"))
 

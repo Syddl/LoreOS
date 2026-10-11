@@ -16,7 +16,7 @@ from starlette.routing import Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from loreos import settings, verify_rls
-from loreos.db import engine, system_session
+from loreos.db import engine
 from loreos.routes import auth as auth_routes
 from loreos.routes import documents, workspaces
 from loreos.routes.documents import MAX_UPLOAD_BYTES
@@ -35,18 +35,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("loreos.api")
 
 
-async def _isolation_problems() -> list[str]:
-    async with system_session() as conn:
-        return await verify_rls.problems(conn)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Refuse to start, naming each missing or wrong setting, rather than fail on the first request (behaviour 19).
 
     Then verify_rls, as the worker does: a loreos_app that RLS does not bind would serve with only the app's filters.
     """
-    problems = settings.startup_problems() or await _isolation_problems()
+    problems = settings.startup_problems() or await verify_rls.isolation_problems()
     for problem in problems:
         log.error(problem)
     if problems:

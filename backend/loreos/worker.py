@@ -176,15 +176,10 @@ async def serve() -> None:
             await asyncio.sleep(POLL_S)
 
 
-async def _rls_problems() -> list[str]:
-    async with system_session() as conn:
-        return await verify_rls.problems(conn)
-
-
 def main() -> int:
     """Check the settings, then the grants, before any claim; exit 1 naming each problem."""
     # Without the grant check, a missing grant fails every store after the embedding is paid for.
-    if problems := settings.startup_problems() or asyncio.run(_rls_problems()):
+    if problems := settings.startup_problems() or asyncio.run(verify_rls.isolation_problems()):
         for problem in problems:
             print(f"worker: {problem}", file=sys.stderr)
         return 1
