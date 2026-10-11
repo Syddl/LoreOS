@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "db:migrate": "uv --directory backend run python -m alembic upgrade head",
+    "db:verify-rls": "uv --directory backend run python -m loreos.verify_rls",
     "dev:api": "uv --directory backend run python -m uvicorn loreos.main:app --host 127.0.0.1 --port 8000 --reload",
     "paid:smoke": "uv --directory backend run python -m loreos.smoke",
     "paid:eval": "uv --directory backend run python -m loreos.evaluation",
