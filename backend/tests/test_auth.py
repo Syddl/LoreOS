@@ -359,16 +359,35 @@ def test_a_bad_signup_gets_422_and_stores_no_user(client, email, password, named
     assert users() == 0
 
 
-@pytest.mark.parametrize("name, expected", [({"workspace_name": "Acme"}, "Acme"), ({}, "My workspace")])
+@pytest.mark.parametrize("name, expected", [({"workspace_name": " Acme "}, "Acme"), ({}, "My workspace")])
 def test_the_first_signup_owns_a_new_workspace_and_default_and_never_an_eval_one(client, name, expected):
     sql("insert into loreos.workspaces (name) values ('eval-0123456789ab')")
     response = client.post(SIGNUP, json={"email": " Ann@Example.com", "password": PASSWORD, **name})
     assert response.status_code == 201
     me = response.json()
     assert me["user"]["email"] == "ann@example.com"
-    assert [(w["name"], w["role"]) for w in me["workspaces"]] == [(expected, "owner"), ("Default", "owner")]
-    assert me["workspaces"][1]["id"] == str(DEFAULT_WORKSPACE_ID)
+    assert [(w["name"], w["role"]) for w in me["workspaces"]] == [("Default", "owner"), (expected, "owner")]
+    assert me["workspaces"][0]["id"] == str(DEFAULT_WORKSPACE_ID)
     assert client.get(ME).json() == me  # logged in by the cookie the signup set
+
+
+@pytest.mark.parametrize("name", ["", "   ", "eval-mine", "a" * 101])
+def test_a_blank_long_or_eval_workspace_name_gets_422_and_stores_nothing(client, name):
+    response = client.post(SIGNUP, json={"email": "ann@example.com", "password": PASSWORD, "workspace_name": name})
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], str)
+    assert users() == 0
+    assert sql("select name from loreos.workspaces") == [("Default",)]
+
+
+def test_me_never_lists_an_eval_workspace_even_with_a_membership(owner):
+    """The same list as GET /api/workspaces; login and invite accept build their Me the same way."""
+    evaluation = sql("insert into loreos.workspaces (name) values ('eval-0123456789ab') returning id")[0][0]
+    sql("insert into loreos.memberships (user_id, workspace_id, role) values (:u, :w, 'owner')", u=owner.id, w=evaluation)
+    default = [{"id": str(DEFAULT_WORKSPACE_ID), "name": "Default", "role": "owner"}]
+    assert owner.client.get(ME).json()["workspaces"] == default
+    assert login(app_client(origin=ORIGIN), owner.email, PASSWORD).json()["workspaces"] == default
+    assert owner.client.get("/api/workspaces").json() == default
 
 
 def test_a_second_signup_gets_403(client):

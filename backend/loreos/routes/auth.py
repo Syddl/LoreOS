@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from loreos import auth, ratelimit
 from loreos.db import system_session
+from loreos.routes.workspaces import Name
 from loreos.workspaces import DEFAULT_WORKSPACE_ID
 
 router = APIRouter()
@@ -32,10 +33,12 @@ SIGNUP_CLOSED = "signup is closed because this LoreOS already has an account; as
 INVITE_GONE = "this invite link is unknown, used or expired; ask the workspace owner for a new one"
 EMAIL_TAKEN = "an account with this email already exists; log in, then open the invite link again"
 NEED_ACCOUNT = "send an email and a password to create an account, or log in first"
+EVAL_NAME = "names starting with eval- are kept for evaluation workspaces; choose another name"  # as POST /api/workspaces
 
+# The same list as GET /api/workspaces: evaluation workspaces (eval-*) never, even with a membership.
 WORKSPACES_OF = (
     "select w.id, w.name, m.role from loreos.memberships m join loreos.workspaces w on w.id = m.workspace_id "
-    "where m.user_id = :u order by w.created_at desc, w.id"
+    "where m.user_id = :u and w.name not like 'eval-%' order by w.created_at, w.name"
 )
 USE_INVITE = (
     "update loreos.invites set used_at = now() "
@@ -52,7 +55,7 @@ class Credentials(BaseModel):
 
 
 class Signup(Credentials):
-    workspace_name: str | None = None
+    workspace_name: Name = DEFAULT_WORKSPACE_NAME
 
 
 class Accept(BaseModel):
@@ -62,7 +65,7 @@ class Accept(BaseModel):
 
 
 async def workspaces_of(conn: AsyncConnection, user_id: uuid.UUID) -> list[dict]:
-    """[{id, name, role}] for each membership, newest workspace first. Evaluation workspaces have none, so never show."""
+    """[{id, name, role}] for each membership, oldest workspace first, as GET /api/workspaces lists them."""
     rows = await conn.execute(text(WORKSPACES_OF), {"u": user_id})
     return [{"id": row.id, "name": row.name, "role": row.role} for row in rows]
 
@@ -76,14 +79,17 @@ async def signup(body: Signup, request: Request, response: Response) -> dict:
     """The first account only: owner of a new workspace and of Default. The lock serialises two first signups."""
     if problem := auth.password_problem(body.password):
         raise HTTPException(422, problem)
+    if body.workspace_name.startswith("eval-"):
+        raise HTTPException(422, EVAL_NAME)
     async with system_session() as conn:
         await conn.execute(text("select pg_advisory_xact_lock(hashtext('loreos.signup'))"))
         if (await conn.execute(text("select exists (select from loreos.users)"))).scalar():
             raise HTTPException(403, SIGNUP_CLOSED)
         user = auth.User(await auth.create_user(conn, body.email, body.password), auth.normalize_email(body.email))
-        name = (body.workspace_name or "").strip() or DEFAULT_WORKSPACE_NAME
         workspace_id = (
-            await conn.execute(text("insert into loreos.workspaces (name) values (:n) returning id"), {"n": name})
+            await conn.execute(
+                text("insert into loreos.workspaces (name) values (:n) returning id"), {"n": body.workspace_name}
+            )
         ).scalar_one()
         await conn.execute(
             text("insert into loreos.memberships (user_id, workspace_id, role) values (:u, :w, 'owner'), (:u, :d, 'owner')"),
