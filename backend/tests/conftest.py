@@ -68,6 +68,19 @@ def sql(query: str, **params):
     return asyncio.run(go())
 
 
+def drain() -> list[str]:
+    """Run the worker until nothing is due; each run_once result in order. A retry is due later, so this ends."""
+    from loreos import worker
+
+    async def go():
+        results = []
+        while (result := await worker.run_once()) is not None:
+            results.append(result)
+        return results
+
+    return asyncio.run(go())
+
+
 @pytest.fixture(scope="session")
 def db():
     """This checkout's test database, recreated empty and migrated to head. Stops the run, never skips, on failure."""

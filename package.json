@@ -8,6 +8,7 @@
     "dev:web": "npm --prefix frontend run dev",
     "paid:smoke": "uv --directory backend run python -m loreos.smoke",
     "paid:eval": "uv --directory backend run python -m loreos.evaluation",
+    "paid:worker": "uv --directory backend run python -m loreos.worker",
     "eval:fetch": "uv --directory backend run python -m loreos.evaluation.fetch",
     "eval:calibration-draft": "uv --directory backend run python -m loreos.evaluation.calibration",
     "check:hooks": "node scripts/check-hooks.mjs",
