@@ -6,6 +6,7 @@ The Host and Origin rules are in test_auth.py.
 import asyncio
 import hashlib
 import logging
+import re
 from pathlib import Path
 
 import httpx2
@@ -16,13 +17,14 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from conftest import ORIGIN, app_client, sql
-from loreos import auth, main
+from conftest import ORIGIN, W, app_client, sql
+from loreos import auth, main, verify_rls
 from loreos.db import system_session
 from loreos.routes import documents
 from loreos.workspaces import DEFAULT_WORKSPACE_ID
 
 INDEX = "<!doctype html><title>LoreOS</title>"
+UPLOAD = f"{W}/documents"  # the one path the upload cap applies to, on POST
 
 # Health
 
@@ -51,6 +53,7 @@ probe.add_middleware(main.BodyLimit)
 
 
 @probe.post("/echo")
+@probe.post("/api/workspaces/{workspace_id}/documents")
 async def echo(request: Request):
     return {"bytes": len(await request.body())}
 
@@ -60,8 +63,8 @@ async def ask(body: Question):
     return body
 
 
-def send_chunks(app, chunks: list[bytes]):
-    """POST chunks as a chunked body, one ASGI message each, with no Content-Length."""
+def send_chunks(app, chunks: list[bytes], path: str = UPLOAD):
+    """POST chunks to path as a chunked body, one ASGI message each, with no Content-Length."""
 
     async def body():
         for chunk in chunks:
@@ -69,7 +72,7 @@ def send_chunks(app, chunks: list[bytes]):
 
     async def go():
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url=ORIGIN) as c:
-            return await c.post("/echo", content=body())
+            return await c.post(path, content=body())
 
     return asyncio.run(go())
 
@@ -89,11 +92,33 @@ def test_a_chunked_body_is_counted_across_messages_and_stops_past_the_cap(monkey
     assert over.json()["detail"].startswith("the request is over 20 MB")
 
 
+def test_a_chunked_body_off_the_upload_path_stops_past_the_small_cap():
+    under = send_chunks(probe, [b"x" * 30 * 1024] * 2, "/echo")
+    assert under.status_code == 200 and under.json() == {"bytes": 60 * 1024}
+    over = send_chunks(probe, [b"x" * 30 * 1024] * 3, "/echo")
+    assert "content-length" not in over.request.headers
+    assert over.status_code == 413
+    assert over.json()["detail"].startswith("the request is over 64 KB")
+
+
 def test_a_body_declared_over_the_cap_is_refused_by_the_real_app_before_routing(client, monkeypatch):
     monkeypatch.setattr(main, "MAX_REQUEST_BYTES", 1000)
-    response = client.post("/api/nope", content=b"x" * 1001)  # unrouted, so past the limit it would be 405
+    response = client.post(UPLOAD, content=b"x" * 1001)  # no credentials, so past the limit it would be 401
     assert response.status_code == 413
     assert response.json()["detail"].startswith("the request is over 20 MB")
+
+
+def test_a_100_kb_json_body_to_login_is_refused_before_parsing(client):
+    response = client.post("/api/auth/login", json={"email": "a@example.com", "password": "x" * 100 * 1024})
+    assert response.status_code == 413
+    assert response.json()["detail"].startswith("the request is over 64 KB")
+    assert sql("select count(*) from loreos.rate_limits") == [(0,)]  # login reserves a slot once it has parsed
+
+
+def test_a_100_kb_upload_is_under_the_upload_cap(owner):
+    response = owner.client.post(UPLOAD, files={"file": ("big.txt", b"word " * 20 * 1024, "text/plain")})
+    assert response.status_code == 202
+    assert response.json()["status"] == "pending"
 
 
 def test_a_validation_error_has_a_string_detail_naming_the_field():
@@ -201,6 +226,19 @@ def test_startup_with_a_blank_openai_key_raises_naming_it(monkeypatch, caplog):
         with app_client():
             pass
     assert any(r.levelno == logging.ERROR and "OPENAI_API_KEY" in r.getMessage() for r in caplog.records)
+
+
+def test_startup_with_a_verify_rls_problem_raises_naming_it(db, monkeypatch, caplog):
+    problem = verify_rls.CHECKS["bypassrls"]
+
+    async def problems(conn):
+        return [problem]
+
+    monkeypatch.setattr(verify_rls, "problems", problems)
+    with caplog.at_level(logging.ERROR), pytest.raises(RuntimeError, match=re.escape(problem)):
+        with app_client():
+            pass
+    assert any(r.levelno == logging.ERROR and problem in r.getMessage() for r in caplog.records)
 
 
 def test_startup_with_every_key_set_serves(db):

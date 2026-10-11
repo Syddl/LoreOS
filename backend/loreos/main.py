@@ -12,16 +12,22 @@ from sqlalchemy import text
 from starlette.datastructures import Headers
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.routing import Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from loreos import settings
-from loreos.db import engine
+from loreos import settings, verify_rls
+from loreos.db import engine, system_session
 from loreos.routes import auth as auth_routes
 from loreos.routes import documents, workspaces
 from loreos.routes.documents import MAX_UPLOAD_BYTES
 
 MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 64 * 1024  # room for the multipart envelope around a file at the cap
 TOO_LARGE = f"the request is over {MAX_UPLOAD_BYTES // (1024 * 1024)} MB; split the file or upload a smaller one"
+# Every other request. FastAPI parses a JSON body before any dependency runs, so login, signup, invite accept and
+# ask would otherwise parse up to the upload cap before an auth check or a rate limit.
+MAX_BODY_BYTES = 64 * 1024
+TOO_LARGE_BODY = f"the request is over {MAX_BODY_BYTES // 1024} KB; only a document upload may be larger"
+UPLOAD = next(route for route in documents.router.routes if route.endpoint is documents.add_document)
 DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"  # the repo root's frontend build
 WRITES = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -29,10 +35,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("loreos.api")
 
 
+async def _isolation_problems() -> list[str]:
+    async with system_session() as conn:
+        return await verify_rls.problems(conn)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Refuse to start, naming each missing or wrong setting, rather than fail on the first request (behaviour 19)."""
-    problems = settings.startup_problems()
+    """Refuse to start, naming each missing or wrong setting, rather than fail on the first request (behaviour 19).
+
+    Then verify_rls, as the worker does: a loreos_app that RLS does not bind would serve with only the app's filters.
+    """
+    problems = settings.startup_problems() or await _isolation_problems()
     for problem in problems:
         log.error(problem)
     if problems:
@@ -44,7 +58,8 @@ app = FastAPI(title="LoreOS", lifespan=lifespan)
 
 
 class BodyLimit:
-    """413 past MAX_REQUEST_BYTES, read per request, whether or not the body declares its length.
+    """413 past MAX_REQUEST_BYTES on the upload route, past MAX_BODY_BYTES on every other, read per request,
+    whether or not the body declares its length.
 
     A declared Content-Length over the cap is refused before the app runs. A chunked body declares none, so
     receive is wrapped to count bytes as they arrive: past the cap it raises, and FastAPI's handler answers 413
@@ -57,9 +72,12 @@ class BodyLimit:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
-        cap = MAX_REQUEST_BYTES
+        if UPLOAD.matches(scope)[0] is Match.FULL:  # the route's own path and method
+            cap, too_large = MAX_REQUEST_BYTES, TOO_LARGE
+        else:
+            cap, too_large = MAX_BODY_BYTES, TOO_LARGE_BODY
         if int(Headers(scope=scope).get("content-length") or 0) > cap:
-            return await JSONResponse({"detail": TOO_LARGE}, status_code=413)(scope, receive, send)
+            return await JSONResponse({"detail": too_large}, status_code=413)(scope, receive, send)
         received = 0
 
         async def counted() -> Message:
@@ -67,7 +85,7 @@ class BodyLimit:
             message = await receive()
             received += len(message.get("body", b""))
             if received > cap:
-                raise HTTPException(413, TOO_LARGE)
+                raise HTTPException(413, too_large)
             return message
 
         await self.app(scope, counted, send)

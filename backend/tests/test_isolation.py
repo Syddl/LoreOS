@@ -8,6 +8,7 @@ RLS does not bind.
 import ast
 import asyncio
 import re
+from contextlib import asynccontextmanager
 
 import pytest
 from sqlalchemy import text
@@ -28,7 +29,7 @@ INSERT_DOCUMENT = (
 )
 LOREOS = BACKEND / "loreos"
 # The files that may call system_session() or engine(): cross-workspace reads the spec lists. main.py only for the
-# health check. A new file here needs a spec row naming its cross-workspace read.
+# health check and the startup verify_rls. A new file here needs a spec row naming its cross-workspace read.
 SYSTEM_SESSION_FILES = {
     "db.py",
     "auth.py",
@@ -42,6 +43,13 @@ SYSTEM_SESSION_FILES = {
     "routes/workspaces.py",
     "evaluation/run.py",
 }
+# The files that may build an engine or read DATABASE_URL themselves, each with its reason. An engine built anywhere
+# else opens connections the system_session scan does not see, which RLS binds only if that code switches the role.
+ENGINE_FILES = {
+    "db.py": "builds the one engine that workspace_session and system_session open",
+    "settings.py": "defines database_url(), the one reader of DATABASE_URL",
+}
+BUILDS_AN_ENGINE = re.compile(r"\bcreate_(async_)?engine\b|\bdatabase_url\(")
 # Whole-literal anchoring on the first keeps prose such as "commit or remove" out.
 ENDS_THE_SWITCH = [
     re.compile(r"^\s*(commit|rollback|end|abort)\s*;?\s*$", re.I | re.M),
@@ -158,7 +166,9 @@ def test_an_owner_cannot_delete_another_workspaces_document_through_its_own_path
     assert ids("documents", b) == {b_document}
 
 
-def test_verify_rls_finds_no_problem_on_the_migrated_database(db):
+def test_verify_rls_finds_no_problem_on_the_migrated_database(ab):
+    """Also pins verify_rls.ISOLATION to what Postgres renders for migration 0002's condition."""
+
     async def go():
         async with system_session() as conn:
             return await verify_rls.problems(conn), await conn.scalar(text("select current_user"))
@@ -179,24 +189,43 @@ def test_verify_rls_main_prints_each_problem_and_exits_1_on_any(db, monkeypatch,
 
 
 # Each negative breaks one thing, as postgres in this checkout's database, inside a transaction that is rolled
-# back (role attributes and grants are transactional), and names the checks it must trip. A superuser has every
-# right, and an owner every right on what it owns, so some trip more than one.
+# back (role attributes, grants and policies are transactional), and names the checks it must trip. A superuser has
+# every right, and an owner every right on what it owns, so some trip more than one. The ab fixture's rows are what
+# "isolated" sees when a session for a random workspace reads more than nothing.
 NEGATIVES = [
     pytest.param(["alter role loreos_app rename to loreos_app_gone"], {"exists"}, id="missing"),
     pytest.param(["alter role loreos_app login"], {"login"}, id="login"),
-    pytest.param(["alter role loreos_app bypassrls"], {"bypassrls"}, id="bypassrls"),
-    pytest.param(["alter role loreos_app superuser"], {"superuser", "owner", "rights"}, id="superuser"),
+    pytest.param(["alter role loreos_app bypassrls"], {"bypassrls", "isolated"}, id="bypassrls"),
+    pytest.param(["alter role loreos_app superuser"], {"superuser", "owner", "rights", "isolated"}, id="superuser"),
     pytest.param(["alter table loreos.rate_limits owner to loreos_app"], {"owner", "rights"}, id="owns-a-table"),
     # testdb_owner is a member of loreos_app, and Postgres refuses a membership loop, so that grant goes first.
+    # A member of the tables' owner counts as their owner, which RLS does not bind.
     pytest.param(
         [f"revoke loreos_app from {TEST_OWNER} cascade", f"grant {TEST_OWNER} to loreos_app"],
-        {"owner", "rights"},
+        {"owner", "rights", "isolated"},
         id="member-of-the-owner",
     ),
     pytest.param(["grant select on loreos.users to loreos_app"], {"rights"}, id="auth-table-right"),
     pytest.param(["revoke delete on loreos.chunks from loreos_app"], {"dml"}, id="dml"),
-    pytest.param(["alter table loreos.chunks disable row level security"], {"rls"}, id="rls-off"),
+    pytest.param(["alter table loreos.chunks disable row level security"], {"rls", "isolated"}, id="rls-off"),
     pytest.param(["drop policy workspace_isolation on loreos.documents"], {"policy"}, id="no-policy"),
+    # Permissive policies are OR-ed, so a second one opens every workspace's rows: Supabase's dashboard templates.
+    pytest.param(
+        ["create policy open on loreos.chunks for all to public using (true)"], {"other_policy", "isolated"}, id="extra-policy"
+    ),
+    pytest.param(
+        ["alter policy workspace_isolation on loreos.documents using (true)"], {"policy", "isolated"}, id="condition-changed"
+    ),
+    pytest.param(
+        [
+            "drop policy workspace_isolation on loreos.chunks",
+            f"create policy workspace_isolation on loreos.chunks for select to loreos_app using ({verify_rls.ISOLATION})",
+        ],
+        {"policy"},
+        id="select-only",
+    ),
+    # Postgres judges a role switch against the session user, postgres here, so the session in "isolated" still
+    # opens; on a connection that logged in without the SET option it is refused, and "isolated" trips too.
     pytest.param(
         [
             "create role loreos_rls_probe",
@@ -206,7 +235,7 @@ NEGATIVES = [
         {"set_option"},
         id="no-set-option",
     ),
-    pytest.param(["revoke usage on schema loreos from loreos_app"], {"schema"}, id="loreos-usage"),
+    pytest.param(["revoke usage on schema loreos from loreos_app"], {"schema", "isolated"}, id="loreos-usage"),
     # On testdb vector sits in public, which grants USAGE to PUBLIC, and has_schema_privilege counts that grant.
     pytest.param(
         ["revoke usage on schema public from loreos_app", "revoke usage on schema public from public"],
@@ -216,12 +245,29 @@ NEGATIVES = [
 ]
 
 
-async def problems_after(statements: list[str]) -> list[str]:
+class OnConnection:
+    """db.engine() for a negative: begin() is a savepoint on the admin connection.
+
+    So the workspace_session inside problems() sees the uncommitted break, and does not wait on the locks that the
+    break holds, as a second connection would.
+    """
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    @asynccontextmanager
+    async def begin(self):
+        async with self.conn.begin_nested():
+            yield self.conn
+
+
+async def problems_after(statements: list[str], monkeypatch) -> list[str]:
     admin = create_async_engine(f"{ADMIN_URL.replace('postgresql:', 'postgresql+asyncpg:')}/{TEST_DATABASE}", poolclass=NullPool)
     try:
         async with admin.connect() as conn:
             for statement in statements:
                 await conn.execute(text(statement))
+            monkeypatch.setattr("loreos.db.engine", lambda: OnConnection(conn))
             found = await verify_rls.problems(conn)
             await conn.rollback()
             return found
@@ -230,9 +276,9 @@ async def problems_after(statements: list[str]) -> list[str]:
 
 
 @pytest.mark.parametrize("statements, expected", NEGATIVES)
-def test_verify_rls_names_what_breaks_isolation(db, statements, expected):
+def test_verify_rls_names_what_breaks_isolation(ab, statements, expected, monkeypatch):
     names = {message: name for name, message in verify_rls.CHECKS.items()}
-    found = asyncio.run(problems_after(statements))
+    found = asyncio.run(problems_after(statements, monkeypatch))
     assert sorted(names[message] for message in found) == sorted(expected)
 
 
@@ -248,6 +294,11 @@ def sources() -> dict[str, str]:
 def test_only_the_listed_files_open_a_session_rls_does_not_bind():
     callers = {name for name, source in sources().items() if "system_session(" in source or "engine()" in source}
     assert callers - SYSTEM_SESSION_FILES == set()
+
+
+def test_only_the_listed_files_build_an_engine_or_read_database_url():
+    callers = {name for name, source in sources().items() if BUILDS_AN_ENGINE.search(source)}
+    assert callers - ENGINE_FILES.keys() == set()
 
 
 def test_nothing_commits_or_rolls_back_a_transaction():
