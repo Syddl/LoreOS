@@ -34,6 +34,26 @@ The single carrier of state between sessions. Update it before a session ends; t
     - Three redproofs PASS: the role switch, a commit, and a `reset role`.
     - The implementer found that the plan's `grant testdb_owner to loreos_app` negative makes a membership loop. The plan now revokes first.
   - **Window A** (phase 1) closed: `check:all` PASS at `47ce731` (ledger).
+  - **Window B**, each implemented in its own worktree, cherry-picked, with a report under `tasks/`:
+
+    | Task | Commit | What it adds | Proof |
+    |---|---|---|---|
+    | 2.1 | `973381a` | rate limit with refund | 7 tests; redproof PASS |
+    | 2.2 | `5b11136` | auth core | 28 tests; redproof PASS |
+    | 2.3 | `a419723` | DOCX and HTML parsers | redproof PASS |
+    | 2.4 | `7a851ff` | URL fetch | 26 tests; redproof PASS |
+    | 2.5 | `059d05b` | smoke preflight runs `verify_rls` | the main session's redproof PASS |
+    | 5.1 | `be674a4`, `6c68438` | Vite 8, React 19, TypeScript 7, Tailwind 4, shadcn; `check:frontend` in `check:all` and CI | redproof PASS; check-wiring 8/8 |
+
+    - **5.1 deviation:** shadcn's CLI now imports `cn` from its own `cn` package (MIT, by shadcn) instead of a local `lib/utils.ts`. `cn` replaces `clsx` and `tailwind-merge`, so both are dropped, and the 5.1 contract's `src/lib/utils.cn` is `cn` from `"cn"`.
+    - **Fix from the 2.4 report**, `a9625ff`: a NAT64 address (`64:ff9b::/96`), which `ipaddress` calls global whatever IPv4 address it carries, is judged by that IPv4 address. Red first; redproof PASS.
+  - **Window B closed:** `check:all` PASS at `e13614f` (ledger).
+  - **Notes for later tasks**, from the window B reports:
+    - **4.1:** the Origin exemption must cover only `Authorization: Bearer`. `current_member` sends any `Authorization` header down the key path and never falls back to the cookie (2.2).
+    - **4.2 and 3.2:** `auth.create_user` and `hash_password` do not check length, so each caller calls `password_problem` (2.2).
+    - **3.1:** `ingest.process` must pass `kind=fetched.kind` for URL documents (2.3).
+    - **3.3:** `parse_html` takes about 10 s on a 5 MB page under bs4's `html.parser`, well inside the lease (2.3).
+    - **Plan wording (2.4):** the proxy case proves the custom transport is kept. httpx2 ignores environment proxies whenever a transport is passed, so it does not test the `trust_env` flag.
 - **For P3's spec revision**, which starts from `main`, so it reads these from this branch until P4 merges:
   - decision 0007, for tqdm;
   - the shared-file rules in this spec's Risks;
@@ -41,7 +61,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Window B: 2.1 to 2.5 by implementers, each in its own worktree, and 5.1, the frontend scaffold, in the main session. The main session runs 2.5's redproof itself, because `smoke.py` matches the spend pattern.
+Window C: 3.1 (enqueue and the stage pipeline), 3.2 (admin reset-password), 5.2 (API client, router and login screens) and 5.6 (license rule and the frontend tree), each by an implementer in its own worktree. The main session runs 3.1's redproof itself, because `ingest.py` matches the spend pattern.
 
 ## Blockers
 
@@ -57,6 +77,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 | date | branch | sha | suite | result | duration | not covered |
 |---|---|---|---|---|---|---|
 | 2026-10-11 (by hand, window A) | p4-platform-shell | 47ce731 | `npm run check:all` | PASS | 117 s | hooks 395/395, agent-hooks 7/7, backend 371 passed and 2 skipped, licenses 48/48, spend 123/123. Not covered: Supabase (`db:verify-rls` live, phase 7); CI on Linux; the unpushed tip |
+| 2026-10-11 (by hand, window B) | p4-platform-shell | e13614f | `npm run check:all` | PASS | 168 s | hooks 395/395, agent-hooks 7/7, backend 454 passed and 2 skipped, licenses 48/48 (backend only until 5.6), spend 123/123, frontend typecheck, test and build. Not covered: the same as window A, and the frontend tree's licenses (5.6) |
 
 ## Port ledger
 
