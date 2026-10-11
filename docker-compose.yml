@@ -1,4 +1,42 @@
+# LoreOS: docker compose up runs the migration, then the api and the worker, against DATABASE_URL in .env.
+# The worker embeds every queued document through OpenAI, so the agent guard asks before `up`.
+x-loreos: &loreos
+  build: .
+  image: loreos:local
+  env_file:
+    - path: .env
+      required: false
+
 services:
+  migrate:
+    <<: *loreos
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    <<: *loreos
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      # The api answers only ALLOWED_HOSTS, so the probe sends the first of them as Host.
+      test: ["CMD", "python", "-c", "import urllib.request as u; from loreos import settings; u.urlopen(u.Request('http://127.0.0.1:8000/api/health', headers={'Host': settings.allowed_hosts()[0]}), timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    <<: *loreos
+    command: ["python", "-m", "loreos.worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   # Test database for `npm run check:backend`: the Postgres major Supabase runs, with pgvector.
   # Start it with: docker compose --profile test up -d testdb
   testdb:

@@ -1,0 +1,35 @@
+# check:compose's override: its own database, a fake key and an unroutable OpenAI URL. .env is never read,
+# so a free check can never reach Supabase or bill OpenAI.
+x-check-env: &check-env
+  DATABASE_URL: postgresql://postgres:postgres@checkdb:5432/postgres
+  OPENAI_API_KEY: sk-check-not-a-real-key
+  OPENAI_BASE_URL: http://0.0.0.0:9/v1
+
+services:
+  migrate:
+    env_file: !reset []
+    environment: *check-env
+    depends_on:
+      checkdb:
+        condition: service_healthy
+
+  api:
+    env_file: !reset []
+    environment: *check-env
+    ports: !override
+      - "127.0.0.1:18000:8000"
+
+  worker:
+    env_file: !reset []
+    environment: *check-env
+
+  checkdb:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_PASSWORD: postgres
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      retries: 30
