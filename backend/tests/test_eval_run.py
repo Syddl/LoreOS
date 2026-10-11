@@ -15,6 +15,7 @@ import pytest
 
 from conftest import sql
 from loreos import answering, chunking, llm, settings
+from loreos.db import RETRIES
 from loreos.evaluation import dataset, run
 from pdf import make_pdf
 
@@ -212,6 +213,13 @@ def test_usage_counts_this_run_only(ev, monkeypatch):
     assert result["usage"] == {"embedding_tokens": CHUNKS + 3, "answer_input_tokens": 300, "answer_output_tokens": 30,
                                "judge_input_tokens": 150, "judge_output_tokens": 15}
     assert any(note.startswith("usage: 3 OpenAI responses") for note in result["notes"]), result["notes"]
+
+
+def test_connection_resets_retried_during_the_run_reach_the_notes(ev, monkeypatch):
+    RETRIES.update(connect_reset=7)  # stale counts from earlier work in the process
+    wrap(monkeypatch, "draft_answer", lambda *args: RETRIES.update(connect_reset=1))
+    result = load(evaluate(limit=2))
+    assert "db: 2 connection attempts were reset while connecting, and retried" in result["notes"], result["notes"]
 
 
 def test_a_second_run_reuses_the_workspace_and_embeds_no_chunk(ev):
