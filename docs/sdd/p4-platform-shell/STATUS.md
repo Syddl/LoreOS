@@ -54,6 +54,28 @@ The single carrier of state between sessions. Update it before a session ends; t
     - **3.1:** `ingest.process` must pass `kind=fetched.kind` for URL documents (2.3).
     - **3.3:** `parse_html` takes about 10 s on a 5 MB page under bs4's `html.parser`, well inside the lease (2.3).
     - **Plan wording (2.4):** the proxy case proves the custom transport is kept. httpx2 ignores environment proxies whenever a transport is passed, so it does not test the `trust_env` flag.
+  - **Window C**, each implemented in its own worktree, cherry-picked, with a report under `tasks/`:
+
+    | Task | Commit | What it adds | Proof |
+    |---|---|---|---|
+    | 3.1 | the 3.1 cherry-pick | `enqueue`, `enqueue_url`, `run_stages`, `record_failed` | 10 new tests; the main session's two redproofs PASS (row lock, lock timeout) |
+    | 3.2 | `f6090b8` | admin reset-password | 8 tests; redproof PASS |
+    | 5.2 | the 5.2 cherry-pick | API client, router, shell, login, signup and invite screens | 18 frontend tests; redproof PASS |
+    | 5.6 | `bb08230`, `bfd2c71` | MPL-2.0 allowed unmodified; the frontend production tree checked (84 packages) | three redproofs PASS |
+
+    5.6 found two defects in its own first draft and fixed both:
+    - npm repeats a package as a stub that lists no dependencies, so walking a name only once missed 14 packages;
+    - a text-mode stdin on Windows silently garbles curly quotes, so a GPL license written with them passed.
+  - **Main session fixes:** `test-setup.ts` now runs Testing Library's cleanup after every test (from the 5.2 report), and the 5.1 contract row no longer names `lib/utils`.
+  - **Notes for later tasks**, from the window C reports:
+    - **4.1:** install a handler for FastAPI's `RequestValidationError` that returns `{detail: "<message>"}` as a string. The default 422 returns a list, which `api.ts` shows as the status text (5.2).
+    - **4.4:** `set local lock_timeout` lasts for the caller's whole transaction. The URL route's session should do nothing after `enqueue_url` (3.1).
+    - **3.3:** `run_stages` returns the chunk count without logging it. The worker logs and builds its own error text, and calls `scrub` unless it goes through `record_failed` (3.1).
+    - **5.3 to 5.5:** a 401 in the middle of a session must send the user to `/login`. The Shell checks the session only when it mounts (5.2).
+    - **6.2:** decision 0002's license paragraph needs a pointer to 0007 (5.6).
+    - **Whole-branch review:**
+      - a `.txt` upload whose bytes equal a normalised URL hashes the same as that URL;
+      - `ingest()` now processes a `pending` duplicate inline, so the evaluation always gets a processed document back (3.1).
 - **For P3's spec revision**, which starts from `main`, so it reads these from this branch until P4 merges:
   - decision 0007, for tqdm;
   - the shared-file rules in this spec's Risks;
