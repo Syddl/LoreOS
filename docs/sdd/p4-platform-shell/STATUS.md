@@ -153,11 +153,17 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Step 9 re-review of the fix wave, by an independent reviewer.
+Steps 9 and 10 are done: the re-review said merge, and its minor and nits are fixed at `ed8ae0b`.
 
-If it passes, push `p4-platform-shell`, but only once the operator approves the push. CI then runs on Linux, and step 11 (claim-green) follows on the pushed tip.
+Next, once the operator approves the push:
+1. Push `p4-platform-shell`. CI on Linux runs both jobs.
+2. Step 11: claim-green on the pushed tip.
+3. Step 12: the PR body.
+4. Phase 7, the live rows, in the merge window.
 
-Phase 7, the live rows, waits for the merge window.
+Two dependencies for that window:
+- `p2-baseline` merges first. P4 then merges `main` and resolves `settings.py`, `.env.example` and `db.py`.
+- The merge timing must sit outside P3's paid runs.
 
 ## Blockers
 
@@ -174,6 +180,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 |---|---|---|---|---|---|---|
 | 2026-10-11 (by hand, window A) | p4-platform-shell | 47ce731 | `npm run check:all` | PASS | 117 s | hooks 395/395, agent-hooks 7/7, backend 371 passed and 2 skipped, licenses 48/48, spend 123/123. Not covered: Supabase (`db:verify-rls` live, phase 7); CI on Linux; the unpushed tip |
 | 2026-10-11 (by hand, window B) | p4-platform-shell | e13614f | `npm run check:all` | PASS | 168 s | hooks 395/395, agent-hooks 7/7, backend 454 passed and 2 skipped, licenses 48/48 (backend only until 5.6), spend 123/123, frontend typecheck, test and build. Not covered: the same as window A, and the frontend tree's licenses (5.6) |
+| 2026-10-12 (by hand, after the re-review) | p4-platform-shell | ed8ae0b | `npm run check:all`; `npm run check:compose` | PASS; PASS | 324 s; about 60 s | hooks 395/395, agent-hooks 7/7, backend 706 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 38 tests, typecheck and build. compose: the config pins the image tag, the worker's restart policy and the `.dockerignore` patterns. Redproofs PASS for the restart pin and the IPv4-translated prefix. Not covered: Supabase (phase 7), CI on Linux (unpushed), a browser |
 | 2026-10-12 (by hand, after the fix wave) | p4-platform-shell | e1fd29e | `npm run check:all`; `npm run check:compose` | PASS; PASS | 323 s; 42 s | hooks 395/395, agent-hooks 7/7, backend 705 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 38 tests, typecheck and build; compose healthy, UI served, no `.env` in the image, worker running, image 93 MB. Not covered: Supabase (phase 7), CI on Linux (unpushed), a browser |
 | 2026-10-11 (by hand, window E2) | p4-platform-shell | a929684 | `npm run check:all` | PASS | 301 s | hooks 395/395, agent-hooks 7/7, backend 675 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 36 tests, typecheck and build. Not covered: the same as window A |
 | 2026-10-11 (by hand, window D) | p4-platform-shell | f32f211 | `npm run check:all` | PASS | 192 s | hooks 395/395, agent-hooks 7/7, backend 523 passed and 2 skipped, licenses 48/48 and 84/84, spend 123/123, frontend 36 tests, typecheck and build. Not covered: the same as window A; a real SIGTERM to the worker |
