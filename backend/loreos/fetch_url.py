@@ -20,7 +20,9 @@ MAX_BYTES = 5 * 1024 * 1024
 TIMEOUT_S = 10
 MAX_REDIRECTS = 5
 DEFAULT_PORTS = {"http": 80, "https": 443}
-NAT64 = ipaddress.ip_network("64:ff9b::/96")  # RFC 6052: ipaddress calls it global whatever IPv4 address it carries
+# Prefixes that carry an IPv4 address in their last 32 bits, which ipaddress calls global whatever that address is:
+# NAT64 (RFC 6052) and the deprecated IPv4-compatible form (RFC 4291, ::a.b.c.d).
+CARRIES_IPV4 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("::/96"))
 KINDS = {"text/html": "html", "application/xhtml+xml": "html", "text/plain": "txt", "application/pdf": "pdf"}
 
 Resolve = Callable[[str, int], Awaitable[list[str]]]
@@ -110,8 +112,9 @@ async def _checked(host: str, port: int, resolve: Resolve) -> str:
 
 
 def _public(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """Global and not multicast. A NAT64 address is judged by the IPv4 address it carries; 6to4 and Teredo are not global."""
-    if address in NAT64:
+    """Global and not multicast. NAT64 and IPv4-compatible addresses are judged by the IPv4 address they carry; 6to4
+    and Teredo are not global."""
+    if any(address in network for network in CARRIES_IPV4):
         address = ipaddress.IPv4Address(int(address) & 0xFFFFFFFF)
     return address.is_global and not address.is_multicast
 

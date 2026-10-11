@@ -72,8 +72,8 @@ async function main() {
   console.log('  ok   the worker is running');
 
   // 7. The image size, for the STATUS record against free disk.
-  const size = spawnSync('docker', ['image', 'inspect', 'loreos:local', '--format', '{{.Size}}'], { encoding: 'utf8' });
-  console.log(`  info image loreos:local is ${(Number(size.stdout.trim()) / 1e6).toFixed(0)} MB`);
+  const size = spawnSync('docker', ['image', 'inspect', 'loreos-check:local', '--format', '{{.Size}}'], { encoding: 'utf8' });
+  console.log(`  info image loreos-check:local is ${(Number(size.stdout.trim()) / 1e6).toFixed(0)} MB`);
 }
 
 let code = 0;

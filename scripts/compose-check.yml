@@ -6,7 +6,9 @@ x-check-env: &check-env
   OPENAI_BASE_URL: http://0.0.0.0:9/v1
 
 services:
+  # Every service gets its own image tag, so the check's build never replaces the loreos:local the real stack runs.
   migrate:
+    image: loreos-check:local
     env_file: !reset []
     environment: *check-env
     depends_on:
@@ -14,12 +16,14 @@ services:
         condition: service_healthy
 
   api:
+    image: loreos-check:local
     env_file: !reset []
     environment: *check-env
     ports: !override
       - "127.0.0.1:18000:8000"
 
   worker:
+    image: loreos-check:local
     env_file: !reset []
     environment: *check-env
 

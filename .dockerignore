@@ -1,6 +1,8 @@
 # Secrets and other checkouts must never reach an image layer: settings reads /app/.env if one exists.
 .env
 .env.*
+**/.env
+**/.env.*
 .git
 .claude/
 .codex/

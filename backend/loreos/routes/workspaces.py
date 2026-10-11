@@ -89,7 +89,7 @@ async def remove_member(user_id: uuid.UUID, member: Owner) -> None:
         if role is None:
             raise HTTPException(404, "no such member in this workspace")
         if role == "owner" and len(owners) == 1:  # raising rolls the delete back
-            raise HTTPException(409, "this is the workspace's last owner; make another member an owner first")
+            raise HTTPException(409, "this is the workspace's last owner, and a workspace needs one; owners cannot be removed")
 
 
 # Invites

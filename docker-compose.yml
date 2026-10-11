@@ -35,7 +35,9 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    restart: unless-stopped
+    # on-failure, not unless-stopped: the worker spends, so a Docker restart must not start it without a command
+    # the agent guard can ask on.
+    restart: on-failure
 
   # Test database for `npm run check:backend`: the Postgres major Supabase runs, with pgvector.
   # Start it with: docker compose --profile test up -d testdb
