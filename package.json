@@ -5,6 +5,7 @@
     "db:migrate": "uv --directory backend run python -m alembic upgrade head",
     "db:verify-rls": "uv --directory backend run python -m loreos.verify_rls",
     "dev:api": "uv --directory backend run python -m uvicorn loreos.main:app --host 127.0.0.1 --port 8000 --reload",
+    "dev:web": "npm --prefix frontend run dev",
     "paid:smoke": "uv --directory backend run python -m loreos.smoke",
     "paid:eval": "uv --directory backend run python -m loreos.evaluation",
     "eval:fetch": "uv --directory backend run python -m loreos.evaluation.fetch",
@@ -14,6 +15,7 @@
     "check:backend": "node scripts/check-backend.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:spend": "node scripts/check-spend.mjs",
-    "check:all": "npm run check:hooks && npm run check:agent-hooks && npm run check:backend && npm run check:licenses && npm run check:spend"
+    "check:frontend": "node scripts/check-frontend.mjs",
+    "check:all": "npm run check:hooks && npm run check:agent-hooks && npm run check:backend && npm run check:licenses && npm run check:spend && npm run check:frontend"
   }
 }
