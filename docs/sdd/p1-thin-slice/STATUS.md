@@ -15,11 +15,11 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Once `OPENAI_API_KEY` is set: `npm run paid:smoke -- --dry-run` (free preflight; the guard asks, since no paid form is exempt), then `npm run paid:smoke`.
+`npm run paid:smoke -- --dry-run` (free preflight; the guard asks, since no paid form is exempt), then `npm run paid:smoke`. It runs detached and logs to `docs/sdd/p1-thin-slice/scratch/smoke.log`. The estimate is under $0.01: one small upload and two questions. It counts against the $5 cap in [decision 0005](../../decisions/0005-cheaper-judge-and-a-spend-cap.md).
 
 ## Blockers
 
-- `OPENAI_API_KEY` is empty in `.env`. It blocks only `paid:smoke`.
+None. `OPENAI_API_KEY` is set (2026-10-11).
 
 ## Steps run differently
 

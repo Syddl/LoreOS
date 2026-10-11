@@ -19,7 +19,7 @@ superseded_by:
 - **The handbook**: its text is CC BY-SA 4.0. The repo's root MIT license covers only GitLab's software. Calibration rows and result files quote handbook passages, so those files under `eval/` are licensed CC BY-SA 4.0, with the attribution in `eval/README.md` and `eval/corpus.json`. LoreOS's code stays MIT. AGENTS.md's copyleft rule governs dependencies, and the corpus is test data, not a dependency.
 - **The PDFs**: US government works, with no share-alike. NIST and OSHA ask for credit, which `eval/corpus.json` gives.
 
-**Judge.** `JUDGE_MODEL` defaults to `gpt-6.1-sol`, at `reasoning_effort="low"`, with no temperature or seed.
+**Judge.** `JUDGE_MODEL` defaults to `gpt-6-luna` ([decision 0005](0005-cheaper-judge-and-a-spend-cap.md); first chosen as `gpt-6.1-sol`), at `reasoning_effort="low"`, with no temperature or seed.
 - It grades faithful or unfaithful against the cited passages only, writing its rationale before the grade.
 - A verdict failure (a refusal, no parsed verdict, or a length or content-filter stop) is recorded on its row.
 - Any `openai.APIError` stops the run, after writing what was done to scratch.

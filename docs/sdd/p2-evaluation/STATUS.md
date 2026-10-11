@@ -35,11 +35,22 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-On branch `p2-baseline`, once `OPENAI_API_KEY` is set (and `npm run eval:fetch` has run on that machine): `npm run paid:eval -- --dry-run`, then run 1.
+On branch `p2-baseline`: `npm run paid:eval -- --dry-run`, then run 1.
+
+## Spend
+
+- **Cap**: $5 of OpenAI for closing P1 and P2, set by the operator ([decision 0005](../../decisions/0005-cheaper-judge-and-a-spend-cap.md)). The judge is `gpt-6-luna`, the answers `gpt-5.4-mini`.
+- **Estimate**, an upper bound per full run:
+  - 81 answer calls and 81 judge calls (111 in the baseline, with the 30 calibration rows), each up to about 3,500 input tokens.
+  - About $0.50 a run.
+  - Embedding the corpus once: 195,274 tokens in 920 chunks, under $0.01.
+- **Run 1**: `npm run paid:eval`, detached, logging to `docs/sdd/p2-evaluation/scratch/run1.log`. The result goes to `docs/sdd/p2-evaluation/scratch/<stamp>-vector-<sha>.json`, since no calibration file exists yet.
+- **Baseline (run 2)**: the same command at a clean, committed tree. It logs to `scratch/run2.log`, and the result goes to `eval/results/`.
+- After each run: its `usage`, priced, against this estimate.
 
 ## Blockers
 
-- `OPENAI_API_KEY` is empty in `.env`. It blocks the paid runs (phase 4) and P1's `paid:smoke`, not the build.
+None. `OPENAI_API_KEY` is set (2026-10-11).
 
 ## Steps run differently
 
