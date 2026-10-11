@@ -72,8 +72,8 @@ Implements [spec.md](spec.md), as revised against P1 and P2. Sizing: this phase 
   2. **drops and recreates** the test database, then sets `testdb_owner` as owner and installs `vector` in `public`. Every session therefore migrates from empty, so a changed migration file always reaches the database: this is what lets 1.2's mutation and P3's re-pointed `down_revision` go red.
      - **The name** is `loreos_test_` plus the checkout directory name, with every character outside `[a-z0-9_]` replaced by `_`, cut to 63 bytes, and always quoted. The bootstrap asserts the prefix before it drops anything.
      - **The admin connection** is hard-coded to `postgres@127.0.0.1:54329`, never read from the environment, so it can never point at Supabase. It runs in autocommit, which `DROP` and `CREATE DATABASE` require.
-     - **No `FORCE`.** When another session is connected to this checkout's database, such as a second pytest run in the same checkout, the bootstrap stops, naming the database, rather than killing that session.
-     - **Role drift.** After creating the roles, the bootstrap runs `alter role loreos_app nologin nobypassrls nosuperuser`. Roles are cluster-wide, so a role left wrong by one checkout is reset rather than leaking into the next.
+     - **One test run per checkout at a time.** The drop uses no `FORCE`, so it refuses while a connection is open. Under NullPool, though, a concurrent run often holds none, so this does not protect a second run in the same checkout. The rule is stated in conftest's docstring and in "Process"; nothing enforces it (third review, N5a).
+     - **Role drift.** The bootstrap never creates `loreos_app`: the migration does, so that `testdb_owner` holds ADMIN on it for `grant ... with set true` on PG17. If the role already exists, a `do` block runs `alter role loreos_app nologin nobypassrls nosuperuser`. Roles are cluster-wide, so a role left wrong by one checkout is reset rather than leaking into the next. On a fresh cluster, such as every CI run, the block does nothing.
      - **Removed worktrees** leave their databases behind. testdb runs on tmpfs, so restarting the container clears them.
   3. migrates, then runs every test connected as `testdb_owner`.
   4. **pins every `_env` key** that `settings.py` reads to a test value, so a `.env` in the checkout changes no test. Today these are `ALLOWED_HOSTS` and the model keys.
@@ -190,6 +190,7 @@ Implements [spec.md](spec.md), as revised against P1 and P2. Sizing: this phase 
   - **Redproof.** `redproof` runs after the commit, because it refuses a dirty tree or an untracked target.
     - The main session runs it for `smoke.py`, `ingest.py`, `worker.py` and `llm.py`, which match the spend pattern, and for its own tasks.
     - Implementers run the rest themselves, with `--project` set to their worktree.
+  - **One test run per checkout at a time.** The bootstrap recreates the checkout's test database at the start of each run, so a second concurrent run in the same checkout breaks the first. Separate worktrees are separate databases.
   - **Checks.** Each acceptance check runs only the task's own tests and the existing ones it names. The main session runs `npm run check:all` at the end of each window, with testdb up and, once 5.1 has landed, `npm ci --prefix frontend` done.
   - **Line endings.** Every new check that reads text splits lines with `splitlines()` or `/\r?\n/`, because a file written on Windows can carry CRLF until it is committed.
 - **Moved P1 assertions.** AGENTS.md says to preserve tests, so P1's assertions move to the scoped routes:
@@ -383,7 +384,7 @@ GET /api/health                   200 {"status": "ok"} | 503
   - **verify_rls.problems(conn)**, read-only, checks that `loreos_app`:
     - exists, cannot log in, has no `BYPASSRLS` and is not a superuser;
     - owns no relation;
-    - has no right on `workspaces` or on any auth table, and has DML on `documents` and `chunks`;
+    - has no right on `workspaces` or on any auth table, and has DML on `documents` and `chunks`. Rights are read through `has_table_privilege`, which counts PUBLIC grants and inherited roles, never raw ACLs;
     - is subject to RLS with `workspace_isolation` on both tables;
     - can be switched to: `pg_has_role(current_user,'loreos_app','SET')` is true;
     - has `USAGE` on `loreos` and on `vector`'s schema.
@@ -410,15 +411,17 @@ GET /api/health                   200 {"status": "ok"} | 503
       - `alter table loreos.rate_limits owner to loreos_app`;
       - `revoke usage on schema public from loreos_app` **and** `revoke usage on schema public from public`. On testdb `vector` lives in `public`, which grants `USAGE` to PUBLIC, and `has_schema_privilege` counts that grant;
       - for the SET option: create a role, grant `loreos_app` to it `with set false`, `set local role` to it, and `problems()` names the `SET` option.
-    - **Coverage pin.** A test asserts that the parametrisation has one case per message `problems()` can emit;
+    - **Expected sets.** Some changes fire more than one check. A superuser has every right, so it trips the superuser and rights checks; owning a table trips the owner and rights checks. Each case therefore asserts an expected **set** of check names, not a single message.
+    - **One more negative**: `grant testdb_owner to loreos_app`. Membership in the owner makes `loreos_app` owner-equivalent and exempt from RLS, and it is expected to trip the rights check.
+    - **Coverage pin.** `problems()` emits from a fixed registry, `verify_rls.CHECKS` (check name to message). The pin asserts that the parametrised cases together cover every name in `CHECKS` (third review, N2);
   - **source scan**: `system_session(` and `engine()` appear only in `SYSTEM_SESSION_FILES`:
     - `db.py`, `auth.py`, `ratelimit.py`, `worker.py`, `admin.py`, `verify_rls.py`, `smoke.py`;
     - `main.py`, for the health check only;
     - `routes/auth.py`, `routes/workspaces.py`, `evaluation/run.py`;
   - **nothing ends a session's transaction early**, because the role and the workspace setting are transaction-local. The scan covers `backend/loreos/`:
-    - no `.commit(` or `.rollback(`, except a savepoint's (`begin_nested`);
-    - no SQL text containing `commit`, `rollback`, `reset role` or `set role` outside `db.py`;
-    - the scan is mutation-proven by inserting `await session.commit()` into `ingest.run_stages`.
+    - no `.commit(` or `.rollback(` at all. None exist today, and `begin_nested` needs neither;
+    - outside `db.py`, no string literal matching `^\s*(commit|rollback|end|abort)\s*;?\s*$`, `\b(re)?set\s+role\b` or `set_config\(`. Whole-literal anchoring keeps prose such as "commit or remove" out (third review, N3);
+    - the scan is mutation-proven twice in `backend/loreos/workspaces.py`, which exists today and does not match the spend pattern: insert `await conn.commit()`, then insert `text("reset role")`.
 - Red first: on the old `db.py`, the session runs as `testdb_owner` and the unfiltered count is A + B. The implementer's `redproof` removes `set_config('role','loreos_app',true)`, and the count case goes red.
 - Skills to load: codebase-design, harness:authoring-a-check, superpowers:test-driven-development
 - Predicted size: 4 files, about 280 lines, 80 minutes
@@ -471,6 +474,7 @@ GET /api/health                   200 {"status": "ok"} | 503
   - **Hashing and tokens.**
     - Passwords go through `argon2.PasswordHasher()` defaults (argon2id).
     - `authenticate` verifies a cached dummy hash for an unknown email, so both paths run one verification.
+    - Verification goes through an async seam, `auth._verify(hash, pw)`, which is `await asyncio.to_thread(verify_password, hash, pw)`. That keeps argon2 off the event loop, and it gives 4.2's concurrency test an awaitable point to gate (third review, N1).
     - Session tokens and key bodies come from `secrets.token_urlsafe(32)`. The database stores only their sha256 hex. A key's `prefix` is the first 8 characters of its random part.
   - **current_member.**
     - A Bearer header decides alone. Unknown, malformed or revoked gets 401; another workspace's key gets 404. Use updates `last_used_at`. A key's role is `member`.
@@ -733,7 +737,7 @@ GET /api/health                   200 {"status": "ok"} | 503
     - logout deletes the row, and `/api/me` afterwards gets 401;
   - **rate limit**:
     - the 6th failure for one email gets 429 with `Retry-After`;
-    - **concurrent guesses**: 20 wrong logins for one email call the hasher's `verify` at most 5 times. They are sent truly at once with `asyncio.gather` over an `httpx2` ASGI transport. The `verify` spy blocks on an `asyncio.Event`, set once every request has either reached `verify` or been answered. Under peek-then-count, all 20 would then pass the peek before any failure is written;
+    - **concurrent guesses**: 20 wrong logins for one email call the hasher's `verify` at most 5 times. They are sent truly at once with `asyncio.gather` over an `httpx2` ASGI transport. The spy replaces the async seam `auth._verify`. It counts its calls, then waits with `asyncio.wait_for(event.wait(), 5)` on an event set once every request has either reached the seam or been answered, then proceeds. Under peek-then-count, all 20 would pass the peek before any failure is written, and the count would be 20;
     - `A@Example.com` and `a@example.com` share one bucket;
     - after 20 failures across emails from one client, the next request gets 429;
     - **refund arithmetic**: after 4 failures, a correct password logs in, and its reservation is refunded (count 4 of 5). The next wrong password gets 401 (count 5), and the one after gets 429. A variant with `refund` patched to do nothing gets 429 on the attempt right after the success;
@@ -802,12 +806,14 @@ GET /api/health                   200 {"status": "ok"} | 503
     - an owner deletes;
     - a key lists and asks in its own workspace;
   - **URLs**: a URL is queued with 202 and kind `url`, and submitting it again gives 202 again;
-  - **lock timeout**: while another connection holds the document row with `select ... for update`, delete gets 409 within about 2 s, and so does re-submitting a URL whose row is locked;
+  - **lock timeout**: while another connection holds the document row with `select ... for update`, delete gets 409 within about 2 s, and so does re-submitting a URL whose row is locked. The test bounds each request at 10 s, so a missing timeout fails instead of hanging;
   - **ask fields**: `answering.answer` is patched to return a dataclass with P1's four fields plus an extra `retrieval_mode`, and the JSON carries `retrieval_mode`. Today `Answer` has exactly the four fields P1 mapped, so only an extra field can tell a field-by-field mapping from `asdict`;
   - **isolation**: two workspaces with chunks.
     - With A's key, the list returns only A's ids, and ask cites only A's chunk ids.
     - A's key on B's documents gets 404.
-- Red first: the router is empty, so a GET gets 404 and a POST gets 405. The implementer's `redproof` builds the ask response from four named fields, as P1 did, and the extra-field case goes red.
+- Red first: the router is empty, so a GET gets 404 and a POST gets 405. The implementer runs two `redproof` mutations:
+  - build the ask response from four named fields, as P1 did, and the extra-field case goes red;
+  - drop `set local lock_timeout` from delete, and the lock-timeout case goes red at its 10 s bound.
 - Skills to load: superpowers:test-driven-development
 - Predicted size: 5 files, about 340 lines, 80 minutes
 
@@ -830,11 +836,12 @@ GET /api/health                   200 {"status": "ok"} | 503
 
       None of these can gate a route.
     - The scan prints what it found, so a new reader fails naming its file and key.
+    - It also flags any `_env(` call outside `settings.py`, which `test_config` would miss (third review, N4).
 - Acceptance check: `uv --directory backend run python -m pytest tests/test_auth.py` green.
 - Red first: the implementer runs three `redproof` mutations:
   - insert `if os.environ.get("DISABLE_AUTH") == "1": return Member(workspace_id, "owner", None, None)` at the top of `auth.current_member`, and both the request pin and the source scan go red;
   - insert a module-level `_OFF = os.getenv("LOREOS_OPEN")` in `auth.py`, and the source scan goes red;
-  - add `os.environ.get("SKIP_SCRUB")` to `ingest.py`, an allowlisted file with a new key, and the source scan goes red.
+  - add `os.environ.get("SKIP_SCRUB")` to `ingest.py`, an allowlisted file with a new key, and the source scan goes red. **The main session runs this one**, because `ingest.py` matches the spend pattern and an implementer cannot answer the ask.
 - Skills to load: harness:authoring-a-check
 - Predicted size: 1 file, about 70 lines, 30 minutes
 
@@ -881,7 +888,7 @@ GET /api/health                   200 {"status": "ok"} | 503
 - Change:
   - **api.ts**:
     - `fetch` with `credentials: "same-origin"`, JSON in and out;
-    - `ApiError(status, detail, retryAfter)` on any non-2xx;
+    - `ApiError(status, detail, retryAfter)` on any non-2xx. A body that is not JSON, such as a plain-text 500 or 503, falls back to the status text, with a test (third review, N7);
     - one function per route.
   - **router.ts**: `usePath`, `navigate` (`pushState` plus a `popstate` listener) and `Link`. The routes:
     - `/login`, `/signup` and `/invite`, which reads the token from `location.hash` and posts it in the body;
@@ -1158,3 +1165,15 @@ The re-review is on `5ebbbac`, in the same review file.
 | F8 | minor | The source scans miss `rollback`, SQL `commit` or `reset role`, `from os import environ`, and new keys in allowlisted files | The transaction scan covers them; the environment scan matches `\benviron\b` and keys its allowlist on file and key |
 | F9 | minor | The `rg` check is vacuous in Git Bash | Patterns without a leading `/` |
 | F10 | nit | STATUS, the session count, the mutation count, `FORWARDED_ALLOW_IPS` | Reworded: STATUS, 3.3 (three mutations), the KNOWN-GAPS row (the proxy's address, never `*`) |
+
+The third review, on `f24c0dc`, in the same file, gives the verdict **merge**. Its seven minors are folded into their tasks:
+
+| # | Finding | Resolution |
+|---|---|---|
+| N1 | A sync `verify` cannot be gated | 2.2 adds the async seam `auth._verify` (`asyncio.to_thread`); 4.2's spy replaces it and waits with a 5 s bound |
+| N2 | Two negatives cannot give exactly one problem; rights from raw ACLs; no registry | Rights through `has_table_privilege`; an expected set per case; a `grant testdb_owner to loreos_app` negative; the `verify_rls.CHECKS` registry and a pin |
+| N3 | The SQL-text scan has no workable matcher; the mutation targets a file not yet written | `.commit(` and `.rollback(` banned outright; anchored literal patterns; mutations in `workspaces.py` |
+| N4 | 4.5's `ingest.py` mutation needs the main session; `_env(` outside settings | The main session runs that one; the scan flags `_env(` |
+| N5 | A plain drop does not protect a concurrent run; the drift reset runs before the role exists | One run per checkout, stated not claimed; a `do` block resets the role only when it exists, and the migration alone creates it |
+| N6 | `lock_timeout` has no red-first, and a missing timeout hangs | A 10 s bound in the test, and a redproof dropping it from delete |
+| N7 | The UI breaks on plain-text 500s | `api.ts` falls back to the status text, with a test |

@@ -23,8 +23,9 @@ The single carrier of state between sessions. Update it before a session ends; t
   - **Re-review** of `5ebbbac`: "fix then re-review", appended to `reviews/plan.md`.
     - Findings 1, 5 and 17 were not resolved.
     - It found new defects F1 to F10. F1, uvicorn's concurrency cap counting idle sockets, made the main session drop the connection cap from v1, with a KNOWN-GAPS row.
-  - **Second revision**: answers F1 to F10, mapped in the plan's last section.
-  - **Third review**: next.
+  - **Second revision** `f24c0dc`: answers F1 to F10, mapped in the plan's last section.
+  - **Third review** of `f24c0dc`: **merge**, appended to `reviews/plan.md`. Its seven minors, N1 to N7, are folded into their tasks; the plan's last section maps them. Step 5 is done.
+- Step 6, implementation: next. The start window runs 1.1, then 1.2, both in the main session.
 - **For P3's spec revision**, which starts from `main`, so it reads these from this branch until P4 merges:
   - decision 0007, for tqdm;
   - the shared-file rules in this spec's Risks;
@@ -32,7 +33,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Step 5, third review: a fresh independent reviewer checks the second revision against both reviews in `reviews/plan.md`. Its verdict is appended there. On "merge", implementation starts with tasks 1.1 and 1.2 (main session).
+Task 1.1 (main session): `uv --directory backend add argon2-cffi python-docx beautifulsoup4 httpx2 httpcore2`, then `settings.allowed_hosts()` and `startup_problems()`, the `ALLOWED_HOSTS` line in `.env.example` and `test_config.py`. Red first. `uv.lock` and `.env.example` ask the operator.
 
 ## Blockers
 

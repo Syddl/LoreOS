@@ -153,3 +153,77 @@ Fix then re-review.
 - I did not measure F1's browser socket count. To reproduce: run the image with `--limit-concurrency 5`, open the UI in two tabs, and grep `docker compose logs api` for "Exceeded concurrency limit."
 - F9's cause is inferred. `MSYS_NO_PATHCONV=1 rg -n -e '"/api/ask' backend/tests` would confirm it; I could not run it, because the shell refuses a leading assignment.
 - Not seen: Supabase's ACL on `extensions`, P3's branch, and the main checkout.
+
+
+---
+
+**Plan re-review 3: p4-platform-shell at `f24c0dc`, against both reviews in `reviews/plan.md`**
+
+All major findings are now resolved. Seven minor findings remain, and each one belongs to a single task.
+
+## Executed
+
+```
+git log --oneline -6; git status --short    -> tip f24c0dc, clean
+git diff --stat 5ebbbac f24c0dc             -> 4 files, +185 -57
+npm run check:all 2>&1 | tail -40           -> "98/98 spend checks passed", exit 0. check:all chains
+                                               with &&, so hooks, agent-hooks, backend and licenses passed
+npm run check:backend 2>&1 | tail -4        -> 330 passed, 2 skipped in 46.03s
+rg -n -e 'api/documents' -e 'api/ask' backend/tests
+                                            -> 16 lines in test_ask_api, test_documents_api and
+                                               test_local_only, so the phase 4 check works in Git Bash
+grep environ|getenv backend/loreos          -> smoke.py:101, ingest.py:139, evaluation/__main__.py:25,:58,
+                                               calibration.py:40 (matches 4.5's allowlist)
+grep commit|rollback|engine() backend/loreos
+                                            -> no .commit( or .rollback(. Prose literals contain the words:
+                                               smoke.py:34 "a rollback needs", preflight.py:45 and
+                                               run.py:290 "commit or remove"
+ls .venv/.../httpx2/_transports/asgi.py     -> ASGITransport exists; starlette/testclient.py imports httpx2
+refused by the reviewer shell: sed -n, echo
+```
+
+## Per-finding resolution
+
+| # | Status |
+|---|---|
+| 1 | **Resolved.** Reserve-first, `normalize_email`, the window-bound refund and the gateway row agree across the design (:150-160), the 2.1 contract, 4.2 and spec behaviour 8. The test's gate is N1. |
+| 5 / F3 | **Resolved.** The negatives run as `postgres` on `TEST_DATABASE`, the PUBLIC revoke now fires, and the superuser, DML and SET cases are added. Two cases cannot meet `== [expected]` (N2). |
+| 17 / F9 | **Resolved.** I ran the pattern; it finds 16 lines today. |
+| F1 | **Resolved.** The cap is dropped, with a stated reason. `lock_timeout` agrees across the design, 3.1, 4.4 and the 4.4 test case. No mutation proves it (N6). |
+| F2 | **Resolved.** 4 failures give count 4. The success reserves 5 and the refund returns it to 4. The next failure reaches 5 and gets 401; the one after reaches 6 and gets 429. Without the refund, the attempt after the success reaches 6 and gets 429. This matches `count <= limit`. |
+| F4 | **Resolved.** The contract has the 422, 4.2 step 3 enforces it, both routes have tests, and there is a mutation. |
+| F5 | **Not resolved,** because parts (a) and (d) do not hold as written (N5). Parts (b), (c) and (e) are resolved. |
+| F6 | **Resolved.** `Slot.window_start`, `refund(bucket, window_start)`, and a boundary test in 2.1. |
+| F7 | **Not resolved,** because the gate cannot be built on a sync `verify` (N1). The concurrency and the peek-then-count mutation are right. |
+| F8 | **Not resolved,** because the SQL-text half has no matcher that works on today's tree, and its mutation targets code that does not exist in window A (N3, N4). |
+| F10 | **Resolved.** |
+
+## Findings
+
+| # | Sev | Location | Impact | Fix | Owner |
+|---|---|---|---|---|---|
+| N1 | minor | `plan.md:736`, `:276` | **The gated spy cannot be built as described.**<br>- `verify_password` is sync (argon2), so a spy cannot await an `asyncio.Event`.<br>- An async spy patched over the sync call returns a coroutine, which is truthy, so the login succeeds.<br>- A thread-blocking gate needs 20 pool threads under peek-then-count, but the default pool has `min(32, cpu+4)`. Below 16 cores the mutation hangs instead of going red. | 2.2 adds an async seam: `await asyncio.to_thread(verify_password, ...)`, which also keeps argon2 off the event loop. The spy replaces the seam and waits with `asyncio.wait_for(event.wait(), 5)`, then proceeds. | 2.2, 4.2 |
+| N2 | minor | `plan.md:386`, `:399-413` | **Two `verify_rls` negatives cannot return exactly one problem.**<br>- A superuser `loreos_app` makes `has_table_privilege` true on every auth table, so that case returns two problems. Owning `rate_limits` does the same if it is in the rights list.<br>- Forcing `== [expected]` pushes the rights check to raw ACLs. Those miss PUBLIC grants and `grant <owner> to loreos_app`, which makes `loreos_app` owner-equivalent and so exempt from RLS.<br>- The coverage pin names no message registry to count against. | Read rights through `has_table_privilege`. Each case asserts an expected **set** (superuser: superuser plus rights). Add the negative `grant testdb_owner to loreos_app`, expecting the rights problem. `problems()` emits from a fixed check-name registry, and the pin reads that registry. | 1.3 |
+| N3 | minor | `plan.md:418-421` | **The transaction scan's SQL half has no matcher.**<br>- A scan of all string literals fails on today's tree (`smoke.py:34`, `preflight.py:45`, `run.py:290`).<br>- A scan of `text()` arguments misses SQL held in constants (`ingest.SELECT_DOCUMENTS`).<br>- `end`, `abort` and `set_config(` are not covered.<br>- A regex cannot tell a savepoint's rollback from any other.<br>- The mutation targets `ingest.run_stages`, which 3.1 creates in window C, in a file that matches the spend pattern. | Ban `.commit(` and `.rollback(` outright: none exist, and `begin_nested` needs neither. Outside `db.py`, flag literals matching `^\s*(commit\|rollback\|end\|abort)\s*;?\s*$`, `\b(re)?set\s+role\b` or `set_config\(`. Run both mutations in `workspaces.py`, which exists and does not match the spend pattern. | 1.3 |
+| N4 | minor | `plan.md:837`, `:191`, `:824` | **4.5's third mutation is given to the wrong owner.**<br>- The `SKIP_SCRUB` mutation edits `ingest.py`, and every allowlisted file matches the spend pattern. Line 191 gives those redproofs to the main session, because an implementer cannot answer the guard's ask.<br>- Separately, `settings._env("X")` called outside `settings.py` passes both `test_config` and the scan. | The main session runs that mutation. The scan also flags `_env(` outside `settings.py`. | main session, 4.5 |
+| N5 | minor | `plan.md:75-76` | **Two bootstrap claims do not hold.**<br>- (a) A plain `drop database` refuses only while a connection is open at that instant. Under NullPool a concurrent run in the same checkout often holds none, so a second run still drops the first run's database mid-run.<br>- (b) The drift reset runs before the migration creates `loreos_app`. On a fresh cluster, which is every CI run, the `alter role` fails.<br>- Creating the role in the bootstrap as `postgres` instead breaks the migration's `grant ... with set true` on PG17, because `testdb_owner` lacks ADMIN on it. | (a) Hold an exclusive per-checkout lock file for the session, or state "one run per checkout" and drop the claim. (b) Reset only when the role exists, in a `do` block, and never create `loreos_app` in the bootstrap. | 1.2 |
+| N6 | minor | `plan.md:805`, `:810` | **`lock_timeout` has no red-first.** No mutation proves it. Without it, the request waits on a lock that the test holds until the request returns, so the case hangs instead of going red. | Bound the request with `asyncio.wait_for(..., 10)`. Add a redproof that drops `set local lock_timeout` from delete. | 4.4 |
+| N7 | minor | `plan.md:100`, `:286`, `:884` | **The UI breaks on the 500s the plan now expects.** With no cap, a burst gets Starlette's plain-text 500, outside the `{detail}` contract. An `ApiError` built from `response.json()` throws on it. | `api.ts` falls back to the status text when the body is not JSON, with a test. | 5.2 |
+
+## Verdict
+
+Merge. No blocker or major remains. Each of N1 to N7 is fixed in its owning task before that task's acceptance check runs.
+
+## Does NOT prove
+
+- **Red-first claims:** I ran no per-task pytest or redproof, because the planned tests do not exist yet. I judged every red-first claim by reading only.
+- **Postgres behaviour, from knowledge rather than a run.** psql is not on the reviewer allowlist. The claims:
+  - `has_table_privilege` is true for a superuser and for an owner;
+  - ALTER ROLE is transactional;
+  - a plain `DROP DATABASE` refuses only while connections are open;
+  - on PG16 and later, granting a role requires ADMIN on it.
+
+  For the owner to run: `docker compose exec testdb psql -U postgres -c "begin; create role r_probe superuser; select has_table_privilege('r_probe','pg_authid','select'); rollback;"`
+- **N1:** I did not run the thread-pool hang.
+- **N4:** I did not replay the redproof command through the guard. Whether it asks depends on argument order; the finding rests on the plan's own rule at `:191`.
+- **Not seen:** P3's branch, Supabase, and the main checkout.
