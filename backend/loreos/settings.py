@@ -10,6 +10,7 @@ ENV_FILE = Path(__file__).resolve().parents[2] / ".env"  # the repo root's .env
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_ANSWER_MODEL = "gpt-5.4-mini"
 DEFAULT_JUDGE_MODEL = "gpt-6-luna"  # decision 0005
+DEFAULT_ALLOWED_HOSTS = "localhost,127.0.0.1"
 
 
 @functools.cache
@@ -63,3 +64,19 @@ def answer_model() -> str:
 
 def judge_model() -> str:
     return _env("JUDGE_MODEL") or DEFAULT_JUDGE_MODEL
+
+
+def allowed_hosts() -> list[str]:
+    """The Host names the api answers; anything else gets 400."""
+    return [host.strip() for host in (_env("ALLOWED_HOSTS") or DEFAULT_ALLOWED_HOSTS).split(",") if host.strip()]
+
+
+def startup_problems() -> list[str]:
+    """The message of each required setting that fails; the api and the worker refuse to start on any."""
+    problems = []
+    for read in (database_url, openai_api_key):
+        try:
+            read()
+        except RuntimeError as e:
+            problems.append(str(e))
+    return problems

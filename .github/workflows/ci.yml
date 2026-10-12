@@ -45,6 +45,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0  # setup-uv publishes no floating major tag
@@ -54,6 +56,9 @@ jobs:
 
       - name: Install the backend
         run: uv --directory backend sync --locked
+
+      - name: Install the frontend
+        run: npm ci --prefix frontend
 
       # New check:* scripts go before check:all in package.json and at the
       # end of this list, so two branches never collide on the same line.
@@ -71,3 +76,25 @@ jobs:
 
       - name: Spend guard on the live config
         run: npm run check:spend
+
+      - name: Frontend typecheck, tests and build
+        run: npm run check:frontend
+
+  # The image builds and the stack starts healthy. Separate from checks because it builds the image every run.
+  # No secrets: scripts/compose-check.yml gives every service its own database and a fake OpenAI key.
+  compose:
+    name: Compose
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Image, compose and the UI
+        run: npm run check:compose

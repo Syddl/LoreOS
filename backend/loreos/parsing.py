@@ -7,7 +7,7 @@ from pathlib import PurePath
 
 from pypdf import PdfReader
 
-KINDS = {".md": "md", ".markdown": "md", ".txt": "txt", ".pdf": "pdf"}
+KINDS = {".md": "md", ".markdown": "md", ".txt": "txt", ".pdf": "pdf", ".docx": "docx"}
 
 FRONT_MATTER = re.compile(r"\A---\n.*?\n(?:---|\.\.\.)(?:\n|\Z)", re.S)
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
@@ -32,19 +32,26 @@ class ParseError(ValueError):
 
 
 def kind_of(filename: str, data: bytes) -> str:
-    """'md', 'txt' or 'pdf', by extension or by a PDF header."""
+    """'md', 'txt', 'pdf' or 'docx', by extension or by a PDF header."""
     if data.startswith(b"%PDF-"):
         return "pdf"
     kind = KINDS.get(PurePath(filename).suffix.lower())
     if not kind:
-        raise UnsupportedType(f"unsupported file type: {filename!r}; upload a .md, .markdown, .txt or .pdf file")
+        raise UnsupportedType(f"unsupported file type: {filename!r}; upload a .md, .markdown, .txt, .pdf or .docx file")
     return kind
 
 
-def parse(filename: str, data: bytes) -> list[Section]:
-    kind = kind_of(filename, data)
+def parse(filename: str, data: bytes, kind: str | None = None) -> list[Section]:
+    """`kind` overrides the name: a fetched page passes 'html', which no file name maps to."""
+    from loreos import parse_docx, parse_html  # here, not at the top: each imports Section and ParseError from this module
+
+    kind = kind or kind_of(filename, data)
     if kind == "pdf":
         return _pdf(data)
+    if kind == "docx":
+        return parse_docx.parse(data)
+    if kind == "html":
+        return parse_html.parse(data)
     text = _decode(data)
     sections = _markdown(text) if kind == "md" else [Section([], None, text.strip())]
     sections = [s for s in sections if s.text]

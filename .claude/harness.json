@@ -19,8 +19,9 @@
     "_why": "Commands that can bill a provider, a GPU or a metered API. An empty list means nothing in this project spends. A plain string matches as a case-insensitive substring anywhere in the command (\"npm start\", \"probe:\"). An entry starting with \"re:\" is a case-insensitive regex tested against each subcommand (\"re:-X\\\\s+POST\\\\s+\\\\S*/api/jobs\"). An exempt token (\"--dry-run\") exempts only the subcommand it sits in, outside a trailing # comment; the other subcommands are still judged. The guard asks in the main session; it denies inside subagents and for background launches. A regex entry also sees the subcommand without its leading NAME=value assignments and wrapper words (env, nohup, timeout, sudo and the like), so an anchored regex is not hidden by them; a plain entry already matches anywhere. In LoreOS every command that calls OpenAI is a root package.json script named paid:<name> (paid:eval, paid:smoke). Each regex starts at a word boundary, not at the start of the subcommand, so a program inside a PowerShell block, a pipeline or $(...) is still seen; the price is that text which names a paid command (grep, a commit message) asks too, as the plain `npm run paid:` pattern always did. They catch paid:<name> run by npm, pnpm, yarn or bun under any file name (npm.cmd, npm.ps1, npm-cli.js) with any flags, and by node --run; any Python interpreter or uv whose command mentions loreos and a paid module (smoke, evaluation, demo, answering, ingest, llm), which covers -m, --module, the .py file and a -c one-liner, and asks for a tool run through uv on those files too; and any HTTP client (curl, wget, Invoke-RestMethod/WebRequest and their aliases, httpie with a URL argument) that names /api or the dev API's port 8000 with any leading zeros, where /api/ask and /api/documents embed and answer through OpenAI. The HTTP pattern fails closed: it covers spellings curl or the server normalise (/api/./ask, %61, curl globs), and a GET of the document list or /docs asks too. Nothing is exempt, --dry-run and --help included. The guard matches an exempt token as a raw substring anywhere in the subcommand. And even the exact `npm run paid:smoke -- --dry-run` runs whatever package.json, .npmrc, an earlier `export npm_config_*=` or PYTHONPATH make it run, which no text matcher sees. So the operator approves the free preflight at the ask prompt too. loreos.smoke still keeps an approved --dry-run free: it runs only its preflight for --dry-run (npm_config_dry_run=true counts too), prints usage for --help and refuses any other argument (tests/test_smoke.py). scripts/check-spend.mjs replays these against the guard.",
     "patterns": [
       "re:(?:^|[\\s(=;{|&/\\\\\"'])(?:(?:npm|pnpm|yarn|bun)[\\w.-]*[\"']?\\s(?:.*\\s)?|node[\\w.-]*[\"']?\\s(?:.*\\s)?--run[\\s=]+)paid:[\\w:-]",
-      "re:(?:^|[\\s(=;{|&/\\\\\"'])(?:python[0-9.]*w?|py|uvx?)(?:\\.exe)?[\"']?(?=\\s).*loreos.*\\b(?:smoke|evaluation|demo|answering|ingest|llm)\\b",
-      "re:(?:^|[\\s(=;{|&\"'])(?:(?:\\S*[/\\\\])?(?:curl|wget|Invoke-RestMethod|Invoke-WebRequest|irm|iwr)(?:\\.exe)?[\"']?\\s.*(?:/api|:0*8000\\b)|https?\\s+(?:\\S+\\s+)*?\\S*(?::0*8000\\b|\\S/api))"
+      "re:(?:^|[\\s(=;{|&/\\\\\"'])(?:python[0-9.]*w?|py|uvx?)(?:\\.exe)?[\"']?(?=\\s).*loreos.*\\b(?:smoke|evaluation|demo|answering|ingest|llm|worker)\\b",
+      "re:(?:^|[\\s(=;{|&\"'])(?:(?:\\S*[/\\\\])?(?:curl|wget|Invoke-RestMethod|Invoke-WebRequest|irm|iwr)(?:\\.exe)?[\"']?\\s.*(?:/api|:0*8000\\b)|https?\\s+(?:\\S+\\s+)*?\\S*(?::0*8000\\b|\\S/api))",
+      "re:(?:^|[\\s(=;{|&/\\\\\"'])docker(?:\\.exe)?[\"']?(?:\\s+compose|-compose(?:\\.exe)?)\\b(?=.*\\s(?:up|start|restart|run|watch)\\b)(?!.*\\sup\\b(?:\\s+--?[\\w-]+)*\\s+testdb\\s*$)"
     ],
     "exempt": []
   },
@@ -88,7 +89,7 @@
       "main": {
         "facts": [
           "Decisions and scope for v1 live in docs/sdd/v1/brief.md; read it before planning.",
-          "Planned layout: backend/ (FastAPI, uv, SQLAlchemy, Alembic), frontend/ (React, Vite, strict TypeScript, plus the widget build), eval/ (questions and committed results). Not created yet; P1 creates what it uses.",
+          "Layout: backend/ (FastAPI, uv, SQLAlchemy, Alembic), frontend/ (React, Vite, strict TypeScript, plus the widget build; P4 creates it), eval/ (questions and committed results).",
           "Postgres is hosted Supabase, reached only through DATABASE_URL on the session pooler. No Supabase SDK, Auth or Storage.",
           "The root package.json orchestrates only; each package carries its own manifest and lockfile."
         ]
@@ -98,9 +99,9 @@
   "owners": {},
   "evidence": {
     "_why": "Where a failed run's record, logs and read-only doctor commands live. Name every deployment that runs jobs, each with its own job store: a reported failure with no record here ran on another deployment. P1 runs one local api (npm run dev:api) against the database DATABASE_URL names; P4 adds the worker.",
-    "jobs": "loreos.documents in the DATABASE_URL database: status, error (stage: class: message), attempts, processed_at per document",
-    "logs": "the npm run dev:api terminal: logger loreos lines 'ingest failed document=<id> stage=<stage>' and 'ask found=<bool> reason=<reason>'",
-    "doctor": ["uv --directory backend run python -m alembic current"]
+    "jobs": "loreos.documents in the DATABASE_URL database: status, error (stage: class: message), attempts, next_attempt_at, locked_until, processed_at per document",
+    "logs": "the npm run dev:api terminal: logger loreos lines 'ingest failed document=<id> stage=<stage>' and 'ask found=<bool> reason=<reason>'; the worker's lines 'worker claimed|processed|failed document=<id>' and 'worker paused class=systemic', in the npm run paid:worker terminal or docker compose logs worker",
+    "doctor": ["uv --directory backend run python -m alembic current", "docker compose ps"]
   },
   "platform": {
     "os": "windows",
@@ -110,7 +111,7 @@
       "Make source edits with the edit tool. A scripted edit (sed -i, perl -pi, PowerShell -replace) can match nothing on a CRLF file, or rewrite its endings, and still exit 0.",
       "In the Bash tool a heredoc loses one backslash level, so write an interpreter script to a file and run the file rather than inlining it.",
       "Run a third-party Python script with py -X utf8 (or PYTHONUTF8=1); Python otherwise reads text in the ANSI code page and turns some UTF-8 silently into mojibake.",
-      "C: has about 23 GB free with Docker on it; check space before large installs and never install PyTorch."
+      "C: has about 20 GB free with Docker on it; check space before large installs and never install PyTorch."
     ]
   }
 }

@@ -1,0 +1,16 @@
+# Secrets and other checkouts must never reach an image layer: settings reads /app/.env if one exists.
+.env
+.env.*
+**/.env
+**/.env.*
+.git
+.claude/
+.codex/
+**/node_modules
+backend/.venv
+**/__pycache__
+**/.pytest_cache
+eval/corpus
+frontend/dist
+**/*.tsbuildinfo
+docs/

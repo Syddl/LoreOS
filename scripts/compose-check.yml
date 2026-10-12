@@ -1,0 +1,39 @@
+# check:compose's override: its own database, a fake key and an unroutable OpenAI URL. .env is never read,
+# so a free check can never reach Supabase or bill OpenAI.
+x-check-env: &check-env
+  DATABASE_URL: postgresql://postgres:postgres@checkdb:5432/postgres
+  OPENAI_API_KEY: sk-check-not-a-real-key
+  OPENAI_BASE_URL: http://0.0.0.0:9/v1
+
+services:
+  # Every service gets its own image tag, so the check's build never replaces the loreos:local the real stack runs.
+  migrate:
+    image: loreos-check:local
+    env_file: !reset []
+    environment: *check-env
+    depends_on:
+      checkdb:
+        condition: service_healthy
+
+  api:
+    image: loreos-check:local
+    env_file: !reset []
+    environment: *check-env
+    ports: !override
+      - "127.0.0.1:18000:8000"
+
+  worker:
+    image: loreos-check:local
+    env_file: !reset []
+    environment: *check-env
+
+  checkdb:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_PASSWORD: postgres
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      retries: 30

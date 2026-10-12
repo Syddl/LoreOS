@@ -1,0 +1,108 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* The theme follows the system setting, so dark: does too; nothing sets a .dark class. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+/*
+ * Ink and highlighter. Ink-blue type on paper; the highlighter marks only evidence: a citation marker and the
+ * passage it opens. Screens use these tokens, never raw colours.
+ */
+:root {
+  --radius: 0.5rem;
+  --background: #ffffff;
+  --foreground: #1b2333;
+  --card: #ffffff;
+  --card-foreground: #1b2333;
+  --popover: #ffffff;
+  --popover-foreground: #1b2333;
+  --primary: #24426b;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f5;
+  --secondary-foreground: #1b2333;
+  --muted: #f4f6f9;
+  --muted-foreground: #5c6676;
+  --accent: #e9edf3;
+  --accent-foreground: #1b2333;
+  --destructive: #b4232a;
+  --border: #e1e5eb;
+  --input: #d5dbe3;
+  --ring: #24426b;
+  --highlight: #ffe873;
+  --highlight-strong: #f5cf2a;
+  --highlight-wash: #fff3b0;
+  --highlight-foreground: #1b2333;
+  --ready: #2f7d4f;
+  --working: #24426b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #11161f;
+    --foreground: #e7ebf1;
+    --card: #171e2a;
+    --card-foreground: #e7ebf1;
+    --popover: #171e2a;
+    --popover-foreground: #e7ebf1;
+    --primary: #a9c1e8;
+    --primary-foreground: #11161f;
+    --secondary: #1f2836;
+    --secondary-foreground: #e7ebf1;
+    --muted: #161d29;
+    --muted-foreground: #98a2b3;
+    --accent: #232d3d;
+    --accent-foreground: #e7ebf1;
+    --destructive: #f07178;
+    --border: rgb(255 255 255 / 9%);
+    --input: rgb(255 255 255 / 15%);
+    --ring: #a9c1e8;
+    --highlight: #f2d14b;
+    --highlight-strong: #f7dd6e;
+    --highlight-wash: rgb(242 209 75 / 16%);
+    --highlight-foreground: #1b2333;
+    --ready: #6fcf97;
+    --working: #a9c1e8;
+  }
+}
+
+@theme inline {
+  /* The documents' voice: answers and passages. System faces only, so nothing is downloaded. */
+  --font-serif: "Iowan Old Style", Charter, "Sitka Text", "Palatino Linotype", Cambria, Georgia, serif;
+  --color-highlight: var(--highlight);
+  --color-highlight-strong: var(--highlight-strong);
+  --color-highlight-wash: var(--highlight-wash);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-ready: var(--ready);
+  --color-working: var(--working);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

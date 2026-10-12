@@ -6,10 +6,15 @@ license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
     "alembic",
+    "argon2-cffi>=25.1.0",
     "asyncpg",
+    "beautifulsoup4>=4.15.0",
     "fastapi",
+    "httpcore2>=2.13.1",
+    "httpx2>=2.13.1",
     "openai",
     "pypdf",
+    "python-docx>=1.2.0",
     "python-multipart",
     "sqlalchemy[asyncio]",
     "tiktoken",

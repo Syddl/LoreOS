@@ -6,7 +6,7 @@ Read docs/sdd/v1/brief.md before any change: it holds the confirmed decisions an
 - The database is any Postgres with pgvector, reached only through `DATABASE_URL`. No Supabase SDK, Auth or Storage.
 - Call it "keyword search", never BM25.
 - Never put a number in the README that a committed evaluation result file under `eval/results/` did not produce. Those files are written by the evaluation run, never by hand.
-- No dependency under AGPL or another copyleft license.
+- No dependency under AGPL, GPL, LGPL or another strong copyleft license. MPL-2.0 is allowed only unmodified (docs/decisions/0007).
 - Every command that calls OpenAI is a root package.json script named `paid:<name>`; the guard asks before it runs. Never call OpenAI from a check, a test or a loop.
 - No AI attribution anywhere: no Co-Authored-By trailers, no "Generated with" footers.
 

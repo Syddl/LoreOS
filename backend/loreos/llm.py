@@ -73,19 +73,25 @@ def _count(kind: str, usage: "CompletionUsage | EmbeddingUsage | None") -> None:
         USAGE[f"{kind}_output"] += usage.completion_tokens
 
 
+class EmbeddingDimensionError(ValueError):
+    """The embedding model returns vectors of another size than the database stores: a setting to fix, not a document fault."""
+
+
 async def embed(texts: list[str]) -> list[list[float]]:
+    """Each batch is checked as it arrives, so a wrong EMBEDDING_MODEL buys one batch, not the whole document."""
     model = settings.embedding_model()
     vectors: list[list[float]] = []
     async with client() as openai:
         for start in range(0, len(texts), EMBED_BATCH):
             response = await openai.embeddings.create(model=model, input=texts[start : start + EMBED_BATCH])
             _count("embedding", response.usage)
-            vectors += [d.embedding for d in sorted(response.data, key=lambda d: d.index)]
-    if (wrong := next((len(v) for v in vectors if len(v) != EMBEDDING_DIM), None)) is not None:
-        raise ValueError(
-            f"{model} returned {wrong} dimensions and LoreOS stores {EMBEDDING_DIM}; "
-            f"set EMBEDDING_MODEL to a {EMBEDDING_DIM}-dimension model such as text-embedding-3-small"
-        )
+            batch = [d.embedding for d in sorted(response.data, key=lambda d: d.index)]
+            if (wrong := next((len(v) for v in batch if len(v) != EMBEDDING_DIM), None)) is not None:
+                raise EmbeddingDimensionError(
+                    f"{model} returned {wrong} dimensions and LoreOS stores {EMBEDDING_DIM}; "
+                    f"set EMBEDDING_MODEL to a {EMBEDDING_DIM}-dimension model such as text-embedding-3-small"
+                )
+            vectors += batch
     return vectors
 
 
