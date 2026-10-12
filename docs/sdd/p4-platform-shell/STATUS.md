@@ -199,6 +199,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 | 2026-10-12 (by hand, phase 7) | p4-platform-shell | 1921145 | `docker system df`; free disk | recorded | | Images 2.141 GB (the LoreOS image is 93 MB), build cache 1.915 GB, volumes 122.9 MB. Free on C: 16 GB of 119 GB. Not recorded: the Supavisor pool size, which needs the operator's Supabase dashboard |
 | 2026-10-12T06:51:00.367Z | p4-platform-shell | 3f572fd1 | `npm run check:all` | PASS | 300.9 s | Supabase and the browser (phase 7 rows, by hand); check:compose (its own CI job); real OpenAI |
 | 2026-10-12T06:58:03.558Z | p4-platform-shell | 1042bf5d | `npm run check:all` | PASS | 294.0 s | Supabase and the browser (phase 7 rows, by hand); check:compose (its own CI job); real OpenAI |
+| 2026-10-12 (by hand, CI) | p4-platform-shell | 4b4183d | CI on Linux, PR #4, run 38215197203: the Checks job | FAIL (test defect) | 3m 10s | `test_twenty_failures_across_emails_from_one_client_then_429`: 401, not 429. The backend tests ran from 06:59:21 to 07:01:26 UTC, across the 07:00:00 boundary of the limiter's 900 s fixed window, so the 21 logins split between two windows. The limiter is right; the test read the real clock. Fixed in `1846680`: `test_auth.py` pins `ratelimit._now` mid-window. Redproof PASS: a clock crossing the boundary fails exactly this test. No other test file counts to a limit |
 
 ## Port ledger
 
