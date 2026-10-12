@@ -153,17 +153,13 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Steps 9 and 10 are done: the re-review said merge, and its minor and nits are fixed at `ed8ae0b`.
+Phase 7 is done (ledger). `main` was merged in at `71936b5`, after P2's baseline merged as `cd2106f`.
 
-Next, once the operator approves the push:
-1. Push `p4-platform-shell`. CI on Linux runs both jobs.
-2. Step 11: claim-green on the pushed tip.
-3. Step 12: the PR body.
-4. Phase 7, the live rows, in the merge window.
-
-Two dependencies for that window:
-- `p2-baseline` merges first. P4 then merges `main` and resolves `settings.py`, `.env.example` and `db.py`.
-- The merge timing must sit outside P3's paid runs.
+Next:
+1. Claim green on the pushed tip, and see CI green on PR #4.
+2. Mark PR #4 ready and merge it with a merge commit.
+3. Close this file (steps 13 and 14, the port ledger) from the next branch off `main`, as P2's close rode on this one.
+4. Still open: the Supavisor pool size, for the KNOWN-GAPS row on the connection cap. It needs the operator's Supabase dashboard.
 
 ## Blockers
 
@@ -173,6 +169,12 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 
 - Steps 1 and 2 (PRD and grilling) are covered by the v1 brief and its "Decisions confirmed by grilling". The brief leaves one open question to P4, the login method, which the spec revision puts to the operator.
 - The branch starts from `main` at `faa149c` (P1 and P2 tooling merged). P2's baseline lands on `main` separately, from `p2-baseline`; P4 touches no evaluation file.
+- Phase 7, the browser:
+  - The Claude extension was not connected, so the operator ran the walkthrough.
+  - The operator also asked for a better design. `1921145` restyles the screens: ink-blue type, a highlighter that marks only citation markers and their passages, a system serif for answers and passages, and Ask as the main column with Documents in a rail. No dependency was added.
+  - It was checked with headless Edge screenshots against fixture API replies, in light, dark and at phone width. No backend was involved and nothing was spent.
+  - It also fixes the cited passage, which rendered muted: `asChild` concatenated both colour classes.
+  - The commits after the branch review, `776809b` and `1921145`, touch only the frontend. They were reviewed separately before the merge (below).
 
 ## Verification ledger
 
@@ -191,6 +193,10 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 | 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | d79b201f | `npm run db:migrate` on Supabase's session pooler | PASS | | `alembic current` went from `0001` to `0002_platform (head)`. Not covered: a rollback (downgrade raises by design) |
 | 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | d79b201f | `npm run db:verify-rls` on Supabase | PASS | | `ok`: every check holds, so the `SET` grant, `USAGE` on `extensions`, the exact policy (Supabase renders the condition as PG17 does) and the 0-row isolation count are all proven. `idle_in_transaction_session_timeout: 0` (off; the worker sets 10min locally). Not covered: the pooler's client limit |
 | 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | d79b201f | `npm run paid:smoke` (and `--dry-run`) on Supabase and OpenAI, approved at the ask; `scratch/smoke.log` | PASS | | Preflight ok at `0002_platform`, including `verify_rls`. The upload processed into 2 chunks through `workspace_session` as `loreos_app`. The answerable question was cited `[1]`, the unanswerable one refused, and the workspace deleted. Cost under $0.01. Not covered: the worker, the UI |
+| 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | cb4bbf5b, then 1921145 | `docker compose up -d --build --wait` on Supabase, approved at the ask | PASS | | Both times: `migrate` exited 0, the api healthy, the worker running. Stopped afterwards with `docker compose stop` |
+| 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | 776809b | The browser walkthrough at `http://localhost:8000`, by the operator | FAIL | | Switching workspace stacked each visited workspace's Documents and Ask instead of replacing them: the two siblings shared one React key. Fixed in `776809b`: red first (4 headings, not 1), redproof PASS |
+| 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | 1921145 | The browser walkthrough at `http://localhost:8000`, by the operator, after the fix and the design pass | PASS | | The operator signed up the first account; a PDF and a URL reached Ready; a cited answer, with the passage opened by keyboard and closed with Escape; an API key created and revoked; an invite link created. Not covered by hand: accepting an invite in a private window (backend and frontend tests cover it); a screenshot from the operator's browser |
+| 2026-10-12 (by hand, phase 7) | p4-platform-shell | 1921145 | `docker system df`; free disk | recorded | | Images 2.141 GB (the LoreOS image is 93 MB), build cache 1.915 GB, volumes 122.9 MB. Free on C: 16 GB of 119 GB. Not recorded: the Supavisor pool size, which needs the operator's Supabase dashboard |
 
 ## Port ledger
 
