@@ -188,6 +188,9 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 | 2026-10-11T17:37:12.521Z | p4-platform-shell | 5e27e799 | `npm run check:all` | PASS | 336.2 s | Supabase (db:migrate, db:verify-rls live: phase 7); check:compose (its own CI job, PASS locally at ed8ae0b); a browser; real OpenAI |
 | 2026-10-11 (by hand, CI) | p4-platform-shell | 127cf36 | CI on Linux, PR #4, run 38160474883: the Checks and Compose jobs | PASS | 3m 2s; 57s | Supabase and the browser (phase 7); real OpenAI |
 | 2026-10-12T06:08:28.092Z | p4-platform-shell | d79b201f | `npm run check:all` | PASS | 298.3 s | Supabase (db:migrate, db:verify-rls live: phase 7); check:compose (its own CI job; PASS locally on the merge); a browser; real OpenAI |
+| 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | d79b201f | `npm run db:migrate` on Supabase's session pooler | PASS | | `alembic current` went from `0001` to `0002_platform (head)`. Not covered: a rollback (downgrade raises by design) |
+| 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | d79b201f | `npm run db:verify-rls` on Supabase | PASS | | `ok`: every check holds, so the `SET` grant, `USAGE` on `extensions`, the exact policy (Supabase renders the condition as PG17 does) and the 0-row isolation count are all proven. `idle_in_transaction_session_timeout: 0` (off; the worker sets 10min locally). Not covered: the pooler's client limit |
+| 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | d79b201f | `npm run paid:smoke` (and `--dry-run`) on Supabase and OpenAI, approved at the ask; `scratch/smoke.log` | PASS | | Preflight ok at `0002_platform`, including `verify_rls`. The upload processed into 2 chunks through `workspace_session` as `loreos_app`. The answerable question was cited `[1]`, the unanswerable one refused, and the workspace deleted. Cost under $0.01. Not covered: the worker, the UI |
 
 ## Port ledger
 
