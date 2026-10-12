@@ -21,6 +21,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 test("/ goes to /login when there is no session", async () => {
@@ -67,7 +68,6 @@ test("switching workspace replaces the screens, never stacks them", async () => 
   expect(screen.getAllByRole("heading", { name: "Documents" })).toHaveLength(1);
   expect(screen.getAllByRole("heading", { name: "Ask" })).toHaveLength(1);
   expect(errors.mock.calls.flat().join(" ")).not.toMatch(/same key/);
-  errors.mockRestore();
 });
 
 test("an owner's settings path shows Settings", async () => {

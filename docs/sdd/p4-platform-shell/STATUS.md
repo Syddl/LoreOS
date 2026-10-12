@@ -197,6 +197,7 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 | 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | 776809b | The browser walkthrough at `http://localhost:8000`, by the operator | FAIL | | Switching workspace stacked each visited workspace's Documents and Ask instead of replacing them: the two siblings shared one React key. Fixed in `776809b`: red first (4 headings, not 1), redproof PASS |
 | 2026-10-12 (by hand, live, phase 7) | p4-platform-shell | 1921145 | The browser walkthrough at `http://localhost:8000`, by the operator, after the fix and the design pass | PASS | | The operator signed up the first account; a PDF and a URL reached Ready; a cited answer, with the passage opened by keyboard and closed with Escape; an API key created and revoked; an invite link created. Not covered by hand: accepting an invite in a private window (backend and frontend tests cover it); a screenshot from the operator's browser |
 | 2026-10-12 (by hand, phase 7) | p4-platform-shell | 1921145 | `docker system df`; free disk | recorded | | Images 2.141 GB (the LoreOS image is 93 MB), build cache 1.915 GB, volumes 122.9 MB. Free on C: 16 GB of 119 GB. Not recorded: the Supavisor pool size, which needs the operator's Supabase dashboard |
+| 2026-10-12T06:51:00.367Z | p4-platform-shell | 3f572fd1 | `npm run check:all` | PASS | 300.9 s | Supabase and the browser (phase 7 rows, by hand); check:compose (its own CI job); real OpenAI |
 
 ## Port ledger
 

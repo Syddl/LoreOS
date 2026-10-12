@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 
 import { ApiError, ask, errorText, type Answer } from "@/api";
-import { CitationPanel } from "@/components/CitationPanel";
+import { CitationPanel, MARKER } from "@/components/CitationPanel";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -80,9 +80,8 @@ export function Ask({ workspaceId }: { workspaceId: string }) {
         )}
         {!answer && !busy && !error && (
           <p className="max-w-prose text-sm text-muted-foreground">
-            Every answer cites the passages it comes from. Open a number like{" "}
-            <span className="rounded-sm bg-highlight px-1.5 text-xs font-semibold text-highlight-foreground">1</span> to
-            read the passage.
+            Answers cite the passages they come from. Open a number like <span className={`${MARKER} px-1.5`}>1</span>{" "}
+            to read the passage.
           </p>
         )}
       </div>

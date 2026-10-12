@@ -1,7 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+/* The theme follows the system setting, so dark: does too; nothing sets a .dark class. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
 
 /*
  * Ink and highlighter. Ink-blue type on paper; the highlighter marks only evidence: a citation marker and the

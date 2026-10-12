@@ -2,6 +2,9 @@ import type { Citation } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
+/** The highlighter look of a citation marker, shared with the hint that shows one before the first answer. */
+export const MARKER = "rounded-sm bg-highlight font-sans text-xs font-semibold text-highlight-foreground tabular-nums";
+
 function location({ heading_path, page }: Citation): string | null {
   if (heading_path.length > 0) return heading_path.join(" > ");
   return page === null ? null : `page ${page}`;
@@ -19,7 +22,7 @@ export function CitationPanel({ citation }: { citation: Citation }) {
         <Button
           size="xs"
           aria-label={`Source ${citation.n}`}
-          className="mx-0.5 h-5 min-w-5 rounded-sm bg-highlight px-1 align-[0.1em] font-sans text-xs font-semibold text-highlight-foreground tabular-nums hover:bg-highlight-strong"
+          className={`${MARKER} mx-0.5 h-5 min-w-5 px-1 align-[0.1em] hover:bg-highlight-strong`}
         >
           {citation.n}
         </Button>

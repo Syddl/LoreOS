@@ -171,3 +171,18 @@ Key files:
 - `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/backend/loreos/routes/workspaces.py`
 - `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/backend/loreos/fetch_url.py`
 - `C:/Users/justine/Documents/code/loreos/.claude/worktrees/p4-platform-shell/backend/loreos/verify_rls.py`
+
+## Review of the commits after merge: `776809b` and `1921145` (2026-10-12)
+
+Scope: `git diff d79b201..3f572fd -- frontend`, which covers the stacking fix and the design pass the operator asked for in phase 7. The reviewer ran `npm run check:frontend` (39/39) and checked the contrast of every new token by hand against the WCAG formula. All pairs pass AA, in light and in dark.
+
+**Verdict: merge.** It found no blocker, major or minor. Its four nits are fixed in the next commit:
+
+| Nit | Fix |
+|---|---|
+| The hint said "Every answer cites", which a refusal does not | "Answers cite the passages they come from" |
+| The hint's sample marker copied the marker's classes | `MARKER` in `CitationPanel.tsx`, used by both |
+| The `dark:` classes never applied: the variant wanted a `.dark` class that nothing sets | The `dark` variant follows `prefers-color-scheme`, like the tokens. shadcn's dark styles now apply as written, and the dark destructive button moves from 2.9:1 to about 5.8:1 |
+| A failed assertion could leave `console.error` silenced | `vi.restoreAllMocks()` in `afterEach` |
+
+Not proven by the review: rendering in a real browser. The main session's headless Edge screenshots, taken against fixture API replies in light, dark and at 390 px, cover it.
