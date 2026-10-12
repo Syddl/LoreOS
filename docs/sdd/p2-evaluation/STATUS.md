@@ -96,6 +96,7 @@ None. `OPENAI_API_KEY` is set (2026-10-11).
 | 2026-10-11 (by hand, live) | p2-baseline | 5f3e7a8 | `npm run paid:eval` run 1, attempt 3; `scratch/run1-retry2.log` | PASS (to scratch, as designed) | | `scratch/20261011T112034Z-vector-5f3e7a80.json`. 81 questions; 4 connect resets retried. Recall@5 0.909, MRR@10 0.825, citation accuracy 0.697, unanswerable refused 1.0, answerable refused 0.076, faithfulness 0.934 (judge `gpt-6-luna`, not yet calibrated). Cost $0.1255. Not covered: judge agreement (needs the graded rows), the committed baseline (run 2) |
 | 2026-10-12 (by hand, live) | p2-baseline | 6852dca | `npm run paid:eval -- --dry-run`, approved at the ask | PASS | | All preflight steps passed, and the workspace was reused (0 corpus tokens). Plan: 81 answer and 111 judge calls. No paid call |
 | 2026-10-12 (by hand, live) | p2-baseline | 6852dca | `npm run paid:eval`, run 2, the baseline; `scratch/run2.log` | PASS (to `eval/results/`) | | `eval/results/20261012T054918Z-vector-6852dcac.json`. Recall@5 0.909, MRR@10 0.825, citation accuracy 0.705, unanswerable refused 1.0, answerable refused 0.061, faithfulness 0.903, judge agreement 1.0 with Claude's grades (decision 0008). Cost $0.1256. Not covered: agreement with a person's grades; the answer model's variance between runs (one run) |
+| 2026-10-12T05:50:50.514Z | p2-baseline | 4a07513c | `npm run check:all` | FAIL | 34.8 s | agreement with a person's grades (decision 0008); a second run's variance |
 
 ## Port ledger
 
