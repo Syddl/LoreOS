@@ -10,7 +10,7 @@ import { FormError } from "@/screens/Login";
 
 /** The answer text, with each [n] that has a citation numbered n turned into its source button. */
 function AnswerText({ answer }: { answer: Answer }) {
-  if (!answer.found) return <p className="text-muted-foreground">{answer.answer}</p>;
+  if (!answer.found) return <p className="font-serif text-lg text-muted-foreground">{answer.answer}</p>;
   const byNumber = new Map(answer.citations.map((c) => [c.n, c]));
   // split with a capture group: odd indexes are the marker numbers.
   const parts = answer.answer.split(/\[(\d+)\]/).map((part, i) => {
@@ -18,7 +18,7 @@ function AnswerText({ answer }: { answer: Answer }) {
     const citation = byNumber.get(Number(part));
     return citation ? <CitationPanel key={i} citation={citation} /> : `[${part}]`;
   });
-  return <p className="leading-7 whitespace-pre-wrap">{parts}</p>;
+  return <p className="max-w-[65ch] font-serif text-lg leading-[1.8] whitespace-pre-wrap">{parts}</p>;
 }
 
 export function Ask({ workspaceId }: { workspaceId: string }) {
@@ -46,30 +46,44 @@ export function Ask({ workspaceId }: { workspaceId: string }) {
   }
 
   return (
-    <section aria-labelledby={titleId} className="space-y-6">
-      <h2 id={titleId} className="text-lg font-medium tracking-tight">
+    <section aria-labelledby={titleId} className="space-y-8">
+      <h2 id={titleId} className="text-2xl font-semibold tracking-tight">
         Ask
       </h2>
-      <form onSubmit={onSubmit} className="grid gap-3">
-        <Label htmlFor={questionId}>Question</Label>
+      <form
+        onSubmit={onSubmit}
+        className="rounded-lg border bg-background shadow-xs focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30"
+      >
+        <Label htmlFor={questionId} className="sr-only">
+          Question
+        </Label>
         <Textarea
           id={questionId}
           name="question"
           required
           placeholder="How many weeks of parental leave do we offer?"
-          className="min-h-24"
+          className="min-h-28 resize-none border-0 bg-transparent px-4 pt-4 text-base shadow-none focus-visible:ring-0 dark:bg-transparent"
         />
-        <Button type="submit" disabled={busy} className="justify-self-start">
-          Ask
-        </Button>
+        <div className="flex justify-end px-3 pb-3">
+          <Button type="submit" disabled={busy}>
+            Ask
+          </Button>
+        </div>
       </form>
       <div aria-live="polite" className="space-y-4">
         {busy && <p className="text-sm text-muted-foreground">Searching your documents...</p>}
         {error && <FormError>{error}</FormError>}
         {answer && (
-          <article aria-label="Answer" className="border-t pt-6">
+          <article aria-label="Answer">
             <AnswerText answer={answer} />
           </article>
+        )}
+        {!answer && !busy && !error && (
+          <p className="max-w-prose text-sm text-muted-foreground">
+            Every answer cites the passages it comes from. Open a number like{" "}
+            <span className="rounded-sm bg-highlight px-1.5 text-xs font-semibold text-highlight-foreground">1</span> to
+            read the passage.
+          </p>
         )}
       </div>
     </section>

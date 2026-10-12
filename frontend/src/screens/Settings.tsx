@@ -317,7 +317,7 @@ function ApiKeys({ workspaceId }: { workspaceId: string }) {
 export function Settings({ workspaceId }: { workspaceId: string }) {
   return (
     <section aria-labelledby="settings-title" className="space-y-8">
-      <h2 id="settings-title" className="text-lg font-medium tracking-tight">
+      <h2 id="settings-title" className="text-2xl font-semibold tracking-tight">
         Settings
       </h2>
       <Members workspaceId={workspaceId} />

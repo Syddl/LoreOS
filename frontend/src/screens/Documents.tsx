@@ -11,7 +11,6 @@ import {
   type DocumentStatus,
   type Role,
 } from "@/api";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,11 +27,11 @@ import { Field, FormError } from "@/screens/Login";
 
 const POLL_MS = 2000;
 
-const STATUS: Record<DocumentStatus, { label: string; variant: "outline" | "secondary" | "destructive" }> = {
-  pending: { label: "Queued", variant: "outline" },
-  processing: { label: "Processing", variant: "outline" },
-  processed: { label: "Ready", variant: "secondary" },
-  failed: { label: "Failed", variant: "destructive" },
+const STATUS: Record<DocumentStatus, { label: string; dot: string }> = {
+  pending: { label: "Queued", dot: "bg-muted-foreground/50" },
+  processing: { label: "Processing", dot: "bg-working motion-safe:animate-pulse" },
+  processed: { label: "Ready", dot: "bg-ready" },
+  failed: { label: "Failed", dot: "bg-destructive" },
 };
 
 const KIND: Record<string, string> = { md: "Markdown", txt: "Text", pdf: "PDF", docx: "Word", url: "Web page" };
@@ -73,7 +72,12 @@ function DeleteDocument({ workspaceId, doc, onDeleted }: { workspaceId: string; 
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={`Delete ${doc.filename}`}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Delete ${doc.filename}`}
+          className="text-muted-foreground hover:text-destructive"
+        >
           <Trash2Icon aria-hidden />
         </Button>
       </DialogTrigger>
@@ -103,15 +107,18 @@ function DocumentRow({ doc, remove }: { doc: Document; remove: ReactNode }) {
   const passages = `${doc.chunk_count} passage${doc.chunk_count === 1 ? "" : "s"}`;
   return (
     <li className="grid gap-1.5 py-3">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1 space-y-0.5">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-medium wrap-anywhere">{doc.filename}</p>
-          <p className="flex gap-3 text-xs text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className={`inline-flex items-center gap-1.5 font-medium ${doc.status === "failed" ? "text-destructive" : "text-foreground"}`}>
+              <span aria-hidden className={`size-1.5 rounded-full ${status.dot}`} />
+              {status.label}
+            </span>
             <span>{KIND[doc.kind] ?? doc.kind}</span>
             {doc.status === "processed" && <span>{passages}</span>}
           </p>
         </div>
-        <Badge variant={status.variant}>{status.label}</Badge>
         {remove}
       </div>
       {doc.status === "failed" && doc.error && <p className="text-sm text-destructive wrap-anywhere">{doc.error}</p>}
@@ -208,18 +215,26 @@ export function Documents({ workspaceId, role }: { workspaceId: string; role: Ro
   }
 
   return (
-    <section aria-labelledby="documents-title" className="space-y-6">
+    <section aria-labelledby="documents-title" className="space-y-5 rounded-xl bg-muted p-5">
       <div className="space-y-1">
-        <h2 id="documents-title" className="text-lg font-medium tracking-tight">
+        <h2 id="documents-title" className="text-base font-semibold tracking-tight">
           Documents
         </h2>
         <p className="text-sm text-muted-foreground">Answers come only from the documents listed here.</p>
       </div>
       <div className="grid gap-3">
-        <Field label="Upload a file" type="file" onChange={onFile} />
+        <Field label="Upload a file" type="file" onChange={onFile} className="bg-background dark:bg-background" />
         <form onSubmit={(e) => void onUrl(e)} className="flex items-end gap-2">
-          <div className="flex-1">
-            <Field label="Web page URL" name="url" type="url" placeholder="https://" autoComplete="url" required />
+          <div className="min-w-0 flex-1">
+            <Field
+              label="Web page URL"
+              name="url"
+              type="url"
+              placeholder="https://"
+              autoComplete="url"
+              required
+              className="bg-background dark:bg-background"
+            />
           </div>
           <Button type="submit" variant="outline" disabled={adding}>
             Add page

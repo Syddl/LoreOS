@@ -180,9 +180,9 @@ export function Shell({ workspaceId, settings }: { workspaceId: string | null; s
     // One key on the pair, so a switch replaces both screens. The same key on two siblings made React keep the old
     // ones and add the new, stacking every workspace visited.
     content = (
-      <div key={current.id} className="grid gap-10 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <Documents workspaceId={current.id} role={current.role} />
+      <div key={current.id} className="grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-14">
         <Ask workspaceId={current.id} />
+        <Documents workspaceId={current.id} role={current.role} />
       </div>
     );
   }
@@ -194,7 +194,7 @@ export function Shell({ workspaceId, settings }: { workspaceId: string | null; s
     <div className="min-h-svh">
       <header className="border-b">
         <nav aria-label="Workspace" className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-3">
-          <span className="mr-3 text-lg font-semibold tracking-tighter">LoreOS</span>
+          <span className="mr-3 font-serif text-xl font-semibold">LoreOS</span>
           {account.workspaces.length > 0 && <WorkspaceSwitcher workspaces={account.workspaces} current={current} />}
           <CreateWorkspace
             onCreated={(w) => {
@@ -205,7 +205,7 @@ export function Shell({ workspaceId, settings }: { workspaceId: string | null; s
           {current?.role === "owner" && (
             <div className="flex items-center gap-1">
               <Link to={`/w/${current.id}`} aria-current={settings ? undefined : "page"} className={pageLink}>
-                Documents
+                Ask
               </Link>
               <Link to={`/w/${current.id}/settings`} aria-current={settings ? "page" : undefined} className={pageLink}>
                 Settings

@@ -3,53 +3,76 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* shadcn's neutral theme. Screens use these tokens, never raw colours. */
+/*
+ * Ink and highlighter. Ink-blue type on paper; the highlighter marks only evidence: a citation marker and the
+ * passage it opens. Screens use these tokens, never raw colours.
+ */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --radius: 0.5rem;
+  --background: #ffffff;
+  --foreground: #1b2333;
+  --card: #ffffff;
+  --card-foreground: #1b2333;
+  --popover: #ffffff;
+  --popover-foreground: #1b2333;
+  --primary: #24426b;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f5;
+  --secondary-foreground: #1b2333;
+  --muted: #f4f6f9;
+  --muted-foreground: #5c6676;
+  --accent: #e9edf3;
+  --accent-foreground: #1b2333;
+  --destructive: #b4232a;
+  --border: #e1e5eb;
+  --input: #d5dbe3;
+  --ring: #24426b;
+  --highlight: #ffe873;
+  --highlight-strong: #f5cf2a;
+  --highlight-wash: #fff3b0;
+  --highlight-foreground: #1b2333;
+  --ready: #2f7d4f;
+  --working: #24426b;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --background: #11161f;
+    --foreground: #e7ebf1;
+    --card: #171e2a;
+    --card-foreground: #e7ebf1;
+    --popover: #171e2a;
+    --popover-foreground: #e7ebf1;
+    --primary: #a9c1e8;
+    --primary-foreground: #11161f;
+    --secondary: #1f2836;
+    --secondary-foreground: #e7ebf1;
+    --muted: #161d29;
+    --muted-foreground: #98a2b3;
+    --accent: #232d3d;
+    --accent-foreground: #e7ebf1;
+    --destructive: #f07178;
+    --border: rgb(255 255 255 / 9%);
+    --input: rgb(255 255 255 / 15%);
+    --ring: #a9c1e8;
+    --highlight: #f2d14b;
+    --highlight-strong: #f7dd6e;
+    --highlight-wash: rgb(242 209 75 / 16%);
+    --highlight-foreground: #1b2333;
+    --ready: #6fcf97;
+    --working: #a9c1e8;
   }
 }
 
 @theme inline {
+  /* The documents' voice: answers and passages. System faces only, so nothing is downloaded. */
+  --font-serif: "Iowan Old Style", Charter, "Sitka Text", "Palatino Linotype", Cambria, Georgia, serif;
+  --color-highlight: var(--highlight);
+  --color-highlight-strong: var(--highlight-strong);
+  --color-highlight-wash: var(--highlight-wash);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-ready: var(--ready);
+  --color-working: var(--working);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

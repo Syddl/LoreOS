@@ -17,22 +17,22 @@ export function CitationPanel({ citation }: { citation: Citation }) {
     <Sheet>
       <SheetTrigger asChild>
         <Button
-          variant="secondary"
           size="xs"
           aria-label={`Source ${citation.n}`}
-          className="mx-0.5 h-5 min-w-5 px-1 align-baseline tabular-nums"
+          className="mx-0.5 h-5 min-w-5 rounded-sm bg-highlight px-1 align-[0.1em] font-sans text-xs font-semibold text-highlight-foreground tabular-nums hover:bg-highlight-strong"
         >
           {citation.n}
         </Button>
       </SheetTrigger>
-      <SheetContent className="sm:max-w-md">
-        <SheetHeader className="pr-12">
+      <SheetContent className="gap-0 sm:max-w-lg">
+        <SheetHeader className="gap-1 border-b px-6 pt-6 pb-5 pr-14">
           <SheetTitle className="wrap-anywhere">{citation.filename}</SheetTitle>
           {where && <p className="text-sm text-muted-foreground">{where}</p>}
         </SheetHeader>
-        <SheetDescription asChild>
-          <blockquote className="mx-4 mb-4 overflow-y-auto border-l-2 pl-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-            {citation.text}
+        {/* Classes go on the description: asChild concatenates rather than merges, and its muted colour won. */}
+        <SheetDescription asChild className="overflow-y-auto px-6 py-6 font-serif text-[1.0625rem] leading-[1.9] text-foreground">
+          <blockquote>
+            <span className="box-decoration-clone bg-highlight-wash px-0.5 whitespace-pre-wrap">{citation.text}</span>
           </blockquote>
         </SheetDescription>
       </SheetContent>

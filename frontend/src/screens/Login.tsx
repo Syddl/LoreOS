@@ -13,7 +13,7 @@ export function AuthPage({ title, children }: { title: string; children: ReactNo
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-sm flex-col justify-center gap-10 px-4 py-12">
       <header className="space-y-3">
-        <p className="text-5xl font-semibold tracking-tighter">LoreOS</p>
+        <p className="font-serif text-5xl font-semibold">LoreOS</p>
         <p className="text-sm text-muted-foreground">Answers from your organization's documents, with the sources to check them.</p>
       </header>
       <section aria-labelledby={titleId} className="space-y-6 border-t pt-8">
