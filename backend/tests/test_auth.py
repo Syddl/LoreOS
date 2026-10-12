@@ -29,6 +29,13 @@ from loreos.workspaces import DEFAULT_WORKSPACE_ID
 PASSWORD = "correct horse battery"
 
 
+@pytest.fixture(autouse=True)
+def mid_window(monkeypatch):
+    """Pins the limiter's clock mid-window. On the real clock, a test that counts to a limit across a window boundary
+    splits its count between two windows: CI ran one across 07:00:00 UTC on 2026-10-12, and its 21st login got 401."""
+    monkeypatch.setattr(ratelimit, "_now", lambda: datetime(2026, 1, 1, 0, 7, 30, tzinfo=UTC))
+
+
 def call(fn, *args):
     """fn(conn, *args) inside one system_session; its result."""
 
