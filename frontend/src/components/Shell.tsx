@@ -177,10 +177,12 @@ export function Shell({ workspaceId, settings }: { workspaceId: string | null; s
         <p className="text-sm text-muted-foreground">Only owners can open this workspace's settings.</p>
       );
   } else {
+    // One key on the pair, so a switch replaces both screens. The same key on two siblings made React keep the old
+    // ones and add the new, stacking every workspace visited.
     content = (
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <Documents key={current.id} workspaceId={current.id} role={current.role} />
-        <Ask key={current.id} workspaceId={current.id} />
+      <div key={current.id} className="grid gap-10 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <Documents workspaceId={current.id} role={current.role} />
+        <Ask workspaceId={current.id} />
       </div>
     );
   }
