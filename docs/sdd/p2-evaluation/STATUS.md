@@ -97,6 +97,7 @@ None. `OPENAI_API_KEY` is set (2026-10-11).
 | 2026-10-12 (by hand, live) | p2-baseline | 6852dca | `npm run paid:eval -- --dry-run`, approved at the ask | PASS | | All preflight steps passed, and the workspace was reused (0 corpus tokens). Plan: 81 answer and 111 judge calls. No paid call |
 | 2026-10-12 (by hand, live) | p2-baseline | 6852dca | `npm run paid:eval`, run 2, the baseline; `scratch/run2.log` | PASS (to `eval/results/`) | | `eval/results/20261012T054918Z-vector-6852dcac.json`. Recall@5 0.909, MRR@10 0.825, citation accuracy 0.705, unanswerable refused 1.0, answerable refused 0.061, faithfulness 0.903, judge agreement 1.0 with Claude's grades (decision 0008). Cost $0.1256. Not covered: agreement with a person's grades; the answer model's variance between runs (one run) |
 | 2026-10-12T05:50:50.514Z | p2-baseline | 4a07513c | `npm run check:all` | FAIL | 34.8 s | agreement with a person's grades (decision 0008); a second run's variance |
+| 2026-10-12T05:53:03.062Z | p2-baseline | 6893f306 | `npm run check:all` | PASS | 94.1 s | agreement with a person's grades (decision 0008); a second run's variance |
 
 ## Port ledger
 
