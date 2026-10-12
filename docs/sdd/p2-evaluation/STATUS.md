@@ -30,15 +30,14 @@ The single carrier of state between sessions. Update it before a session ends; t
   2. Done: `OPENAI_API_KEY` set (2026-10-11).
   3. Done: `npm run paid:eval -- --dry-run` passed (ledger).
   4. Done: run 1, to scratch, on the third attempt (ledger). The first two stopped on connection resets, fixed in `5f3e7a8`.
-  5. **Open, the operator's part**:
-     - `eval/judge_calibration.jsonl` is drafted (30 rows, `human: null`) from run 1 and not yet committed.
-     - Grade each row from its passages alone. `docs/sdd/p2-evaluation/scratch/calibration-sheet.md` shows them readably, with no verdict.
-     - Then commit the graded file.
+  5. Done (2026-10-12): Claude graded the 30 rows at the operator's request ([decision 0008](../../decisions/0008-calibration-graded-by-claude.md)).
+     - The result is 29 faithful and 1 unfaithful (q066), graded blind from each row's passages. The reason for each is in [calibration-grades.md](calibration-grades.md).
+     - Judge agreement in the baseline therefore measures agreement with Claude's grades, not a person's.
   6. Run 2 (the baseline, to `eval/results/`), committed.
 
 ## Next step
 
-The operator grades the 30 rows in `eval/judge_calibration.jsonl` and commits them. Then run 2: `npm run paid:eval -- --dry-run`, then `npm run paid:eval`, detached, logging to `scratch/run2.log`.
+Run 2, the baseline, on a clean committed tree: `npm run paid:eval -- --dry-run`, then `npm run paid:eval`, detached, logging to `scratch/run2.log`.
 
 ## Spend
 
