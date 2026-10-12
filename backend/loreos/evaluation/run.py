@@ -22,7 +22,7 @@ import openai
 from sqlalchemy import text
 
 from loreos import answering, chunking, ingest, llm, parsing, retrieval, settings
-from loreos.db import engine, workspace_session
+from loreos.db import RETRIES, engine, workspace_session
 from loreos.evaluation import dataset, labels, metrics
 
 SCHEMA = 1
@@ -111,11 +111,14 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str, preflight_n
     opening = [f"preflight: {note}" for note in preflight_notes]
     notes: list[str] = []
     llm.USAGE.clear()
+    RETRIES.clear()
 
     def build() -> dict:
         summary = metrics.summarize(rows, pairs)
         missing = llm.USAGE["responses_without_usage"]
         usage_notes = [f"usage: {missing} OpenAI responses reported no token usage; the usage block leaves their tokens out"]
+        resets = RETRIES["connect_reset"]
+        db_notes = [f"db: {resets} connection attempts were reset while connecting, and retried"]
         return {
             "schema": SCHEMA,
             "git_sha": preflight_sha,
@@ -148,7 +151,7 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str, preflight_n
                 "judge_input_tokens": llm.USAGE["judge_input"],
                 "judge_output_tokens": llm.USAGE["judge_output"],
             },
-            "notes": opening + (usage_notes if missing else []) + notes,  # the preflight's first, a stop's last
+            "notes": opening + (usage_notes if missing else []) + (db_notes if resets else []) + notes,  # the preflight's first, a stop's last
             "questions": rows,
         }
 
