@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 feature: p4-platform-shell
 ---
 
@@ -146,20 +146,18 @@ The single carrier of state between sessions. Update it before a session ends; t
     - **Whole-branch review:**
       - a `.txt` upload whose bytes equal a normalised URL hashes the same as that URL;
       - `ingest()` now processes a `pending` duplicate inline, so the evaluation always gets a processed document back (3.1).
-- **For P3's spec revision**, which starts from `main`, so it reads these from this branch until P4 merges:
+- **Steps 11 to 14: done** (2026-10-12).
+  - The last claim-green PASS was on the pushed tip `e230d288`, with CI on Linux green on `75894a6` (run 38216285006).
+  - PR #4 merged into `main` as `43b2281`, a merge commit.
+  - This file closed from `p4-close`.
+- **For P3's spec revision**, which starts from `main`:
   - decision 0007, for tqdm;
   - the shared-file rules in this spec's Risks;
   - a requirement change: P3 behaviour 7 loads the reranker in the api only, not the worker, which never searches.
 
 ## Next step
 
-Phase 7 is done (ledger). `main` was merged in at `71936b5`, after P2's baseline merged as `cd2106f`.
-
-Next:
-1. Claim green on the pushed tip, and see CI green on PR #4.
-2. Mark PR #4 ready and merge it with a merge commit.
-3. Close this file (steps 13 and 14, the port ledger) from the next branch off `main`, as P2's close rode on this one.
-4. Still open: the Supavisor pool size, for the KNOWN-GAPS row on the connection cap. It needs the operator's Supabase dashboard.
+None. P4 is done. One follow-up stays open, and it does not block anything: record the Supavisor pool size, read from the operator's Supabase dashboard, in the KNOWN-GAPS row on the connection cap.
 
 ## Blockers
 
@@ -206,4 +204,4 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 
 | Branch | Status | Reference |
 |---|---|---|
-| main | required | |
+| main | done | `43b2281` (PR #4, merge commit) |
