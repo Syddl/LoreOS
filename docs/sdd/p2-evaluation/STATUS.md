@@ -33,11 +33,16 @@ The single carrier of state between sessions. Update it before a session ends; t
   5. Done (2026-10-12): Claude graded the 30 rows at the operator's request ([decision 0008](../../decisions/0008-calibration-graded-by-claude.md)).
      - The result is 29 faithful and 1 unfaithful (q066), graded blind from each row's passages. The reason for each is in [calibration-grades.md](calibration-grades.md).
      - Judge agreement in the baseline therefore measures agreement with Claude's grades, not a person's.
-  6. Run 2 (the baseline, to `eval/results/`), committed.
+  6. Done (2026-10-12): run 2 wrote the baseline, `eval/results/20261012T054918Z-vector-6852dcac.json` (destination `results`).
+     - **Retrieval:** Recall@5 0.909, MRR@10 0.825.
+     - **Answers:** citation accuracy 0.705, unanswerable refused 1.0, answerable refused 0.061.
+     - **Judge:** faithfulness 0.903 by `gpt-6-luna`. Judge agreement is 1.0 with Claude's grades: 29 of 29 faithful and 1 of 1 unfaithful (q066).
+     - **Latency:** search p50 1307 ms, p95 1838 ms.
+     - **Cost:** $0.1256.
 
 ## Next step
 
-Run 2, the baseline, on a clean committed tree: `npm run paid:eval -- --dry-run`, then `npm run paid:eval`, detached, logging to `scratch/run2.log`.
+Push `p2-baseline`, claim green on the pushed tip, open the PR, and merge it with a **merge commit** once CI is green. Then close P2 (steps 13 and 14).
 
 ## Spend
 
@@ -52,7 +57,8 @@ Run 2, the baseline, on a clean committed tree: `npm run paid:eval -- --dry-run`
 - **Actual so far**:
   - Run 1 cost $0.1255; with its two stopped attempts, $0.1259. Priced from each result file's `usage` at aggregator prices: embedding $0.02, answers $0.75 / $4.50, judge $0.10 / $0.50 per 1M tokens.
   - `paid:smoke` cost under $0.01.
-  - Total: about $0.13 of the $5 cap.
+  - The baseline (run 2) cost $0.1256, reusing run 1's corpus embeddings.
+  - Total: about $0.26 of the $5 cap.
   - The estimate was high because the answers and grades are short: 5,713 answer output tokens and 5,573 judge output tokens over 81 questions.
 
 ## Blockers
@@ -88,6 +94,8 @@ None. `OPENAI_API_KEY` is set (2026-10-11).
 | 2026-10-11 (by hand, live) | p2-baseline | 307e32f | `npm run paid:eval` run 1, attempts 1 and 2; `scratch/run1.log`, `scratch/run1-retry.log` | FAIL (environment) | | Stopped in ingest on `ConnectionResetError`, at 2 and then 20 of 48 files processed. Partial results `scratch/20261011T105100Z-vector-307e32ff.json` and `scratch/20261011T105410Z-vector-307e32ff.json`. Fixed in `5f3e7a8`. |
 | 2026-10-11 (by hand) | p2-baseline | 5f3e7a8 | `npm run check:all` | PASS | 102 s | 335 passed, 1 skipped (`judge_calibration.jsonl` not committed yet) |
 | 2026-10-11 (by hand, live) | p2-baseline | 5f3e7a8 | `npm run paid:eval` run 1, attempt 3; `scratch/run1-retry2.log` | PASS (to scratch, as designed) | | `scratch/20261011T112034Z-vector-5f3e7a80.json`. 81 questions; 4 connect resets retried. Recall@5 0.909, MRR@10 0.825, citation accuracy 0.697, unanswerable refused 1.0, answerable refused 0.076, faithfulness 0.934 (judge `gpt-6-luna`, not yet calibrated). Cost $0.1255. Not covered: judge agreement (needs the graded rows), the committed baseline (run 2) |
+| 2026-10-12 (by hand, live) | p2-baseline | 6852dca | `npm run paid:eval -- --dry-run`, approved at the ask | PASS | | All preflight steps passed, and the workspace was reused (0 corpus tokens). Plan: 81 answer and 111 judge calls. No paid call |
+| 2026-10-12 (by hand, live) | p2-baseline | 6852dca | `npm run paid:eval`, run 2, the baseline; `scratch/run2.log` | PASS (to `eval/results/`) | | `eval/results/20261012T054918Z-vector-6852dcac.json`. Recall@5 0.909, MRR@10 0.825, citation accuracy 0.705, unanswerable refused 1.0, answerable refused 0.061, faithfulness 0.903, judge agreement 1.0 with Claude's grades (decision 0008). Cost $0.1256. Not covered: agreement with a person's grades; the answer model's variance between runs (one run) |
 
 ## Port ledger
 
