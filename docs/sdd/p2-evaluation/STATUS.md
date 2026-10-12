@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 feature: p2-evaluation
 ---
 
@@ -21,7 +21,7 @@ The single carrier of state between sessions. Update it before a session ends; t
   - Their re-review said merge ([reviews/branch.md](reviews/branch.md)).
 - **Step 11**: claim-green PASS on the pushed tips `3f765ba0` and `b7997100`.
 - **Step 12**: done. PR #3 (the tooling and the evaluation set) merged into main as `faa149c`, a merge commit, with CI green. The operator chose to merge before the baseline, because OpenAI is not reachable yet.
-- **Steps 13 and 14**: open until the baseline lands from the `p2-baseline` branch. Merge it with a merge commit, so the result's `git_sha` stays on `main`.
+- **Steps 13 and 14**: done (2026-10-12). PR #5 (`p2-baseline`: the baseline, the cheaper judge, the connect-reset fix and the P1 close) merged into main as `cd2106f`, a merge commit, with CI green. The baseline's `git_sha` `6852dcac` is reachable from `main`. Claim-green PASS on its pushed tip `6893f306` (ledger).
 - **Step 8 and phase 4**, the operator's part:
   1. Done: Claude drafted `eval/questions.jsonl` at the operator's request ([decision 0004](../../decisions/0004-evaluation-set-drafted-by-claude.md)).
      - It holds 81 questions, 15 of them unanswerable.
@@ -42,7 +42,7 @@ The single carrier of state between sessions. Update it before a session ends; t
 
 ## Next step
 
-Push `p2-baseline`, claim green on the pushed tip, open the PR, and merge it with a **merge commit** once CI is green. Then close P2 (steps 13 and 14).
+None. P2 is done. P3 measures against `eval/results/20261012T054918Z-vector-6852dcac.json`.
 
 ## Spend
 
@@ -103,4 +103,4 @@ None. `OPENAI_API_KEY` is set (2026-10-11).
 
 | Branch | Status | Reference |
 |---|---|---|
-| main | done for the tooling and the set; the baseline is required | `faa149c` (PR #3, merge commit). The baseline follows from `p2-baseline` |
+| main | done | `faa149c` (PR #3, merge commit: the tooling and the set); `cd2106f` (PR #5, merge commit: the baseline) |
