@@ -9,7 +9,7 @@ from sqlalchemy.engine import make_url
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"  # the repo root's .env
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_ANSWER_MODEL = "gpt-5.4-mini"
-DEFAULT_JUDGE_MODEL = "gpt-6.1-sol"
+DEFAULT_JUDGE_MODEL = "gpt-6-luna"  # decision 0005
 
 
 @functools.cache

@@ -7,7 +7,7 @@ LoreOS scores its retrieval and its answers against questions a person wrote. Th
 | `corpus.json` | The 48 corpus files: URL, sha256 and source attribution | by hand, [decision 0003](../docs/decisions/0003-evaluation-corpus-and-judge.md) |
 | `corpus/` | The downloaded files and `outline.txt` (git-ignored) | `npm run eval:fetch` |
 | `questions.jsonl` | The evaluation set: 60 to 100 questions, about 15 unanswerable | drafted by Claude, each label and answer checked ([decision 0004](../docs/decisions/0004-evaluation-set-drafted-by-claude.md)) |
-| `judge_calibration.jsonl` | 30 answers graded by hand, to measure the judge | `npm run eval:calibration-draft`, then the operator grades |
+| `judge_calibration.jsonl` | 30 answers graded faithful or unfaithful, to measure the judge | `npm run eval:calibration-draft`, then graded by Claude at the operator's request ([decision 0008](../docs/decisions/0008-calibration-graded-by-claude.md); a reason for each row in `docs/sdd/p2-evaluation/calibration-grades.md`). So judge agreement means agreement with Claude's grades, not a person's |
 | `results/` | One JSON file per committed run | `npm run paid:eval` only, never by hand |
 
 ## 1. Fetch the corpus (free)
