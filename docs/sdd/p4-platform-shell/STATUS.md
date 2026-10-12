@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 feature: p4-platform-shell
 ---
 
@@ -146,20 +146,18 @@ The single carrier of state between sessions. Update it before a session ends; t
     - **Whole-branch review:**
       - a `.txt` upload whose bytes equal a normalised URL hashes the same as that URL;
       - `ingest()` now processes a `pending` duplicate inline, so the evaluation always gets a processed document back (3.1).
-- **For P3's spec revision**, which starts from `main`, so it reads these from this branch until P4 merges:
+- **Steps 11 to 14: done** (2026-10-12).
+  - The last claim-green PASS was on the pushed tip `e230d288`, with CI on Linux green on `75894a6` (run 38216285006).
+  - PR #4 merged into `main` as `43b2281`, a merge commit.
+  - This file closed from `p4-close`.
+- **For P3's spec revision**, which starts from `main`:
   - decision 0007, for tqdm;
   - the shared-file rules in this spec's Risks;
   - a requirement change: P3 behaviour 7 loads the reranker in the api only, not the worker, which never searches.
 
 ## Next step
 
-Phase 7 is done (ledger). `main` was merged in at `71936b5`, after P2's baseline merged as `cd2106f`.
-
-Next:
-1. Claim green on the pushed tip, and see CI green on PR #4.
-2. Mark PR #4 ready and merge it with a merge commit.
-3. Close this file (steps 13 and 14, the port ledger) from the next branch off `main`, as P2's close rode on this one.
-4. Still open: the Supavisor pool size, for the KNOWN-GAPS row on the connection cap. It needs the operator's Supabase dashboard.
+None. P4 is done. One follow-up stays open, and it does not block anything: record the Supavisor pool size, read from the operator's Supabase dashboard, in the KNOWN-GAPS row on the connection cap.
 
 ## Blockers
 
@@ -201,9 +199,10 @@ None. P4 builds without OpenAI; its live rows (`db:verify-rls` on Supabase, a br
 | 2026-10-12T06:58:03.558Z | p4-platform-shell | 1042bf5d | `npm run check:all` | PASS | 294.0 s | Supabase and the browser (phase 7 rows, by hand); check:compose (its own CI job); real OpenAI |
 | 2026-10-12 (by hand, CI) | p4-platform-shell | 4b4183d | CI on Linux, PR #4, run 38215197203: the Checks job | FAIL (test defect) | 3m 10s | `test_twenty_failures_across_emails_from_one_client_then_429`: 401, not 429. The backend tests ran from 06:59:21 to 07:01:26 UTC, across the 07:00:00 boundary of the limiter's 900 s fixed window, so the 21 logins split between two windows. The limiter is right; the test read the real clock. Fixed in `1846680`: `test_auth.py` pins `ratelimit._now` mid-window. Redproof PASS: a clock crossing the boundary fails exactly this test. No other test file counts to a limit |
 | 2026-10-12T07:10:13.712Z | p4-platform-shell | e230d288 | `npm run check:all` | PASS | 319.4 s | Supabase and the browser (phase 7 rows, by hand); check:compose (its own CI job); real OpenAI |
+| 2026-10-12T07:23:24.476Z | p4-close | e31d9ed1 | `npm run check:all` | PASS | 304.2 s | docs only: closes P4's STATUS |
 
 ## Port ledger
 
 | Branch | Status | Reference |
 |---|---|---|
-| main | required | |
+| main | done | `43b2281` (PR #4, merge commit) |
