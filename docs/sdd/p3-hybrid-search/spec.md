@@ -29,7 +29,7 @@ Kill switch: `RERANK=off` skips the reranker and serves the fused order. It cove
 
 1. Keyword search returns the chunks in the workspace that hold any lexeme of the question, ranked by `ts_rank_cd`.
    - The terms are ORed, not ANDed. `websearch_to_tsquery` alone ANDs every word of a full question and matches almost nothing.
-   - The lexemes are the ones `to_tsvector('english', question)` produces, used as they are: they are not stemmed a second time, and no character of the question is parsed as query syntax.
+   - The lexemes are the ones `plainto_tsquery('english', question)` produces, with its ANDs turned into ORs. They are stemmed once, and no character of the question is parsed as query syntax.
    - A question made only of stop words returns no hits.
    - It is called keyword search everywhere, since Postgres ranking uses no corpus-wide statistics.
 2. Chunk size is measured first, in `vector` mode, at three settings: 250/25, 500/50 and 1000/100 tokens. All three runs use one SHA and differ only in their flags.
@@ -67,7 +67,8 @@ Kill switch: `RERANK=off` skips the reranker and serves the fused order. It cove
 | # | Behaviour | Check | Expected | Does NOT exercise |
 |---|---|---|---|---|
 | 1 | Keyword search | `npm run check:backend`, `tests/test_keyword_search.py` | Expected: <ul><li>keyword search finds an exact product term that the fake vector order misses;</li><li>a question of stop words only returns no hits;</li><li>a question holding `&`, `\|`, `!`, `:` or `'` neither errors nor fails to match;</li><li>it never returns another workspace's chunk, under `loreos_app`.</li></ul> | Ranking quality (that is the evaluation's job) |
-| 1 | Generated column | `tests/test_migrations.py` | `tsv` is filled on insert and on rows that existed before the upgrade; the GIN index exists. | |
+| 1 | Generated column | `tests/test_schema.py` | `tsv` is filled on insert, from the heading path and the text, and the GIN index exists. | Rows that existed before the upgrade (next row) |
+| 1 | Existing rows | `npm run db:migrate` on Supabase, then `select count(*) from loreos.chunks where tsv is null` (free) | 0, since Postgres computes a stored generated column for every existing row when the column is added. Ledger row by hand. | |
 | 3 | Fusion | `tests/test_fusion.py` | A hand-computed RRF order, with stable ties. | |
 | 3, 4 | Modes | `tests/test_retrieval.py` | `hybrid` returns a chunk that only keyword search found. `hybrid_rerank` reorders by a fake scorer and keeps the top `k`. A workspace without chunks buys no embedding in any mode. | |
 | 4, 5 | Reranker | `tests/test_rerank.py` | The real model scores a relevant pair above an irrelevant one. The first run downloads the model, which is free. | Latency on the deploy host |
@@ -123,7 +124,7 @@ That is about $0.85 to $1.05 in all, or $1.25 with one rerun.
 | `rerank` loaded and called inline | It runs in a worker thread | The api is async, and seconds of inference on the event loop would stall every other request. |
 | The model left open | `Xenova/ms-marco-MiniLM-L-6-v2` | fastembed 0.9.0 lists 8 cross-encoders. `jina-reranker-v2-base-multilingual` is CC-BY-NC, and the BGE models are 0.6 to 2.3 GB. `jina-reranker-v1-turbo-en` advertises 8k tokens, but fastembed cuts it at 512 like the others. It was also slower: 3.1 s against 2.3 to 2.7 s for 30 passages, measured on the dev machine on 2026-10-14. |
 | A generated column "from the heading path and chunk text" | It goes through an immutable SQL wrapper for the heading path | A generated column refuses a stable function. |
-| `websearch_to_tsquery` with ORed terms | The lexemes `to_tsvector` produces, ORed as they are | Building the query by hand from the question's words would stem them twice and parse `&`, `\|` and `!` as operators. |
+| `websearch_to_tsquery` with ORed terms | `plainto_tsquery`'s output with `&` turned into `\|` | Building the query by hand from the question's words would stem them twice and parse `&`, `\|` and `!` as operators. `plainto_tsquery` ignores punctuation, and its output quotes every lexeme. |
 | The chunk flags "feed the evaluation workspace key" | They set the chunker's budget for the run, and `chunk()` reads its defaults when called | `chunk()` binds `CHUNK_TOKENS` as a default argument when Python defines it, so `ingest.run_stages` would ignore any flag. The key, the preflight's plan and the result's `settings` already read the module values. |
 | No npm handling for the new flags | `--chunk-tokens` and `--chunk-overlap` join `NPM_SWALLOWED` | npm takes a flag given before `--` as its own config, and P2 refuses that for `--mode` and `--limit`. |
 | "Result files record search latency per mode" as new work | It is already there: `search_ms`, p50 and p95, per file | P2 records it. P3's work is that the timing wraps the whole search in every mode. |
