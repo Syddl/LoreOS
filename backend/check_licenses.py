@@ -21,12 +21,17 @@ COPYLEFT = re.compile(
 
 
 def declared(dist) -> str:
-    """License-Expression when present, else the License field and the license classifiers."""
+    """License-Expression when present, else the License field and the license classifiers, else the text of the
+    license files the package ships (License-File), whole, so a copyleft name anywhere in them fails."""
     meta = dist.metadata
     if expression := meta.get("License-Expression"):
         return expression
     classifiers = [c.split(" :: ")[-1] for c in meta.get_all("Classifier") or [] if c.startswith("License ::")]
-    return " | ".join(part for part in [meta.get("License") or "", *classifiers] if part.strip())
+    if found := " | ".join(part for part in [meta.get("License") or "", *classifiers] if part.strip()):
+        return found
+    # Metadata 2.4 keeps them under licenses/ in .dist-info; older wheels at its top.
+    texts = [dist.read_text(f"licenses/{name}") or dist.read_text(name) or "" for name in meta.get_all("License-File") or []]
+    return "\n".join(text.strip() for text in texts if text.strip())
 
 
 def npm_license(pkg: dict) -> str:
