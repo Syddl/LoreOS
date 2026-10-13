@@ -38,6 +38,12 @@ A reviewer subagent reviews each phase (step 7).
   - A test file name like `tests/test_eval_modes.py` does not match, because `_` is a word character.
   - `uv --directory backend run python -m pytest tests/...` never names `loreos`.
 - **CI** runs `uv sync --locked`, then each check. It keeps no cache for fastembed.
+- **Probed on testdb (pg17), 2026-10-14:**
+  - **The generated column.** `array_to_string` has `provolatile = 's'`, and a generated column using it fails with "generation expression is not immutable".
+  - **The OR query.** `replace(plainto_tsquery('english', q)::text, ' & ', ' | ')::tsquery`:
+    - "What is the e-mail policy for SKU-4471?" gives `'e-mail' | 'e' | 'mail' | 'polici' | 'sku' | '-4471'`;
+    - "the and of" gives an empty query, with `numnode` 0 and a NOTICE;
+    - "a & b | !c :d 'e' (f) O'Brien\x" gives quoted lexemes only.
 
 ## Phases
 
