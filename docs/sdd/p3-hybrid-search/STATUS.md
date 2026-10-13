@@ -20,11 +20,16 @@ The single carrier of state between sessions. Update it before a session ends; t
     - the reranker model, `Xenova/ms-marco-MiniLM-L-6-v2`;
     - the default-mode rule in behaviour 9: a slower mode must win on Recall@5 or MRR@10 without losing on the other;
     - the tie rule for chunk size: when both metrics tie, the smaller chunk wins.
-- Step 4, plan: next.
+- Step 4, plan: done (2026-10-14), `plan.md`. It has two build phases (window A: 1.1 to 1.3; window B: 2.1, then 2.2), the paid measurement in phase 3, then review. The main session implements the tasks.
+- Step 5, plan review by execution, recorded in [reviews/plan.md](reviews/plan.md):
+  - **First review** of `c9f6cae`: "fix then re-review", with 1 blocker, 2 majors, 12 minors and 6 nits. `check:all` was green, with 712 backend tests. The blocker: an untracked result dirtied the tree, so `--mode all` could commit only one of its three files.
+  - **Revision** `840abe1` answers each finding, mapped in the plan's last section.
+  - **Re-review** of `840abe1`: **merge**. Its 5 minors and 5 nits are folded in. Step 5 is done.
+- Step 6, implementation: next, task 1.1.
 
 ## Next step
 
-Draft `plan.md` from the revised spec (step 4), then have it reviewed by execution (step 5).
+Task 1.1: migration `0003_keyword_search` and `keyword_search`, red first.
 
 ## Blockers
 

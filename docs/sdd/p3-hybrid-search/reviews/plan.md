@@ -68,3 +68,45 @@ Fix then re-review.
 - **Found by reading, not reproduced:** the blocker and the import cycle.
 - **Not verified, needs install or network:** fastembed's API, wheels and licenses.
 - **Reported by the main session, not run by the reviewer:** the testdb probes.
+
+## Re-review, of `840abe1`
+
+Lens: plan. Reviewer: harness:reviewer, with fresh context and a read-only shell.
+
+### Executed
+
+```
+npm run check:all            (tip 840abe1)
+check:hooks 395/395, check:agent-hooks 7/7, check:backend 712 passed in 208.15s,
+check:licenses 48/48 + 84/84, check:spend 123/123, check:frontend 39 tests, build ok
+exit code 0
+```
+
+**First-review findings:** all resolved, except the `RERANK=maybe` CLI exit, which had no acceptance case. The reviewer judged the `tree_clean` narrowing sound:
+- a tracked change, a staged add and every other untracked file still count;
+- each result still records the preflight SHA, checked against HEAD at the write.
+
+### Findings
+
+| Severity | Where | Impact | Fix | Owner |
+|---|---|---|---|---|
+| minor | plan, 2.2 tests | The temp-repo and `--mode all` tests had no named layout. With `ROOT` at `tmp_path`, every input is untracked. With `RESULTS_DIR` outside `ROOT`, the case passes with or without the exception. And CI runners have no git identity. | Name the layout: a repo under `tmp_path`, `RESULTS_DIR` inside it, the inputs outside it, the real `tree_clean`, a commit with `-c user.*`. Exempt top-level `*.json` only, and nothing when `RESULTS_DIR` is outside `ROOT`. | plan, 2.2 |
+| minor | plan, 1.3 handoff | A module-level `from loreos.retrieval import Hit` in `rerank.py` is a second cycle. | `rerank.py` imports nothing from `loreos` at module level. | 1.3 |
+| minor | plan, 1.2 and 2.2 | `rrf_k` has no owner. | `fusion.RRF_K = 60`. | 1.2, 2.2 |
+| minor | spec, Interfaces and Risks | The `rrf` return type and the PUBLIC grant contradict the plan. | Update both. | plan |
+| minor | plan, phase 3 step 7 | Switching `DEFAULT_MODE` turns tests red at phase 4 that assume vector serving. | Assert `retrieval_mode == serving_mode()`, and run `check:all` after the switch. | 2.1, phase 3 |
+| nit | 2.2 | `RERANK=maybe` has no case. | Add it. | 2.2 |
+| nit | `test_eval_cli.py` | `stopping_preflight` keeps the old signature. | Name it. | 2.2 |
+| nit | 1.1 | The new negative should be a `NEGATIVES` entry. | Make it one. | 1.1 |
+| nit | plan, Parallel windows | `retrieval.py` also passes between tasks. | Reword. | plan |
+| nit | phase 3 step 5 | Nothing forces the sweep onto one SHA. | Check the three files' `git_sha` before the commit. | phase 3 |
+
+### Verdict
+
+Merge. All ten items above were folded into the plan and spec in the commit that records this review.
+
+### Does NOT prove
+
+- **Not run:** paid commands, `check:compose`, Supabase, and the planned tests.
+- **Found by reading, not reproduced:** the `Hit` cycle and the `relative_to` ValueError.
+- **Not probed:** `has_function_privilege`'s behaviour on testdb.

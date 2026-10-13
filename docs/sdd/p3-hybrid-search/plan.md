@@ -55,7 +55,9 @@ Each task's `redproof` runs after the task's commit, because redproof refuses a 
 
 ## Parallel windows
 
-All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1.3, 2.1, 2.2, then phase 3. One file passes between tasks, in order: `run.py` gets 2.1's two call-site edits, then 2.2's.
+All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1.3, 2.1, 2.2, then phase 3. Two files pass between tasks, always in order:
+- `retrieval.py` goes from 1.1 to 2.1;
+- `run.py` goes from 2.1 (its two call sites) to 2.2.
 
 | Window | Tasks | Shared files (must be none) |
 |---|---|---|
@@ -67,8 +69,8 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
 | From | To | Handoff |
 |---|---|---|
 | 1.1 | 2.1 | `retrieval.keyword_search(session, workspace_id, query, n) -> list[Hit]`, where `score` is `ts_rank_cd` |
-| 1.2 | 2.1 | `fusion.rrf(rankings: list[list[uuid]], k=60) -> list[tuple[uuid, float]]`, best first, with each id's RRF score |
-| 1.3 | 2.1, 2.2 | `rerank.RERANK_MODEL`. `rerank.model()` is cached and raises `RuntimeError` with the corrective action. `rerank.rerank(query, hits) -> list[Hit]` is sync, and `score` is the cross-encoder score. `rerank.py` imports `ingest` inside `rerank()`, because a module-level import closes a cycle through `retrieval`. |
+| 1.2 | 2.1, 2.2 | `fusion.RRF_K = 60`, and `fusion.rrf(rankings: list[list[uuid]], k=RRF_K) -> list[tuple[uuid, float]]`, best first, with each id's RRF score |
+| 1.3 | 2.1, 2.2 | `rerank.RERANK_MODEL`. `rerank.model()` is cached and raises `RuntimeError` with the corrective action. `rerank.rerank(query, hits) -> list[Hit]` is sync, and `score` is the cross-encoder score. `rerank.py` imports nothing from `loreos` at module level: `Hit` only under `TYPE_CHECKING`, and `ingest` inside `rerank()`. Either import at module level closes a cycle through `retrieval`. |
 | 2.1 | 2.2 | `retrieval.MODES`, `retrieval.DEFAULT_MODE` (`"vector"` until decision 0010), `search(..., mode="vector")`, `answer_from_hits(question, hits, mode)`, `settings.rerank_on()` |
 | 2.2 | 3 | `npm run paid:eval -- --mode M --chunk-tokens N --chunk-overlap N`, and `--mode all`. An untracked `eval/results/*.json` no longer dirties the tree. |
 
@@ -102,7 +104,7 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
   - another workspace's chunk is never returned when the search runs under `workspace_session`;
   - the rank prefers the chunk with more matched lexemes;
   - in `test_schema.py`, `tsv` holds a heading word and a text word after a plain insert, and `chunks_tsv` exists in `pg_indexes`;
-  - in `test_isolation.py`, `verify_rls` reports the new check failing after `revoke execute ... from loreos_app, public` inside a rolled-back transaction, or after the equivalent the existing negatives use.
+  - in `test_isolation.py`, a new `NEGATIVES` entry revokes execute on `loreos.heading_text(text[])` from `loreos_app` and `public` on the admin connection, rolled back like the others. Its expected set is the new check's name alone, so `test_the_negatives_cover_every_check` covers it.
 - Red first: the tests import `keyword_search`, which does not exist, so collection fails. With the module but no migration, the SQL errors on the missing `tsv` column.
 - Redproof: replace the `' | '` join with `' & '`. The many-word question case must go red.
 - Skills to load: harness:authoring-a-check.
@@ -112,7 +114,7 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
 
 - Files owned: `backend/loreos/fusion.py` (new), `backend/tests/test_fusion.py` (new).
 - Depends on: none.
-- Change: `rrf(rankings, k=60)` returns `(id, score)` pairs, best first.
+- Change: `RRF_K = 60`, and `rrf(rankings, k=RRF_K)` returns `(id, score)` pairs, best first.
   - The score is the sum of `Fraction(1, k + rank)`, with rank counted from 1. Exact arithmetic makes ties exact.
   - A tie breaks on the best single rank, then on the id.
   - The score is returned as a float. The function is pure.
@@ -142,6 +144,7 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
     - deleting that cache;
     - network access for the first download;
     - "or set RERANK=off".
+  - `rerank.py` imports nothing from `loreos` at module level: `Hit` only under `TYPE_CHECKING`.
   - `rerank(query, hits)` imports `ingest` inside, and scores each hit on `ingest.embedding_input`'s form: the heading path, a blank line, the text. It sets `score` and returns the hits sorted by score, descending, with ties kept in input order.
 - Acceptance check:
   - `uv --directory backend run python -m pytest tests/test_rerank.py` passes. An autouse fixture calls `rerank.model.cache_clear()` before and after each test. Two cases:
@@ -188,7 +191,7 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
     - no embedding is bought on an empty workspace in any mode;
     - the existing tests pass unchanged;
   - in `test_answering.py`, the existing calls get the mode, and a refusal carries it;
-  - in `test_ask_api.py`, `retrieval_mode == "vector"` is in the JSON;
+  - in `test_ask_api.py`, the JSON's `retrieval_mode` equals `retrieval.serving_mode()`, so the case survives the phase 3 flip;
   - in `test_rerank_switch.py`, with `DEFAULT_MODE` monkeypatched to `hybrid_rerank`:
     - `RERANK=off` answers with `retrieval_mode == "hybrid"` and never calls `rerank.model`;
     - `on` with `rerank.model` raising makes the lifespan raise with "RERANK=off" in the message;
@@ -219,8 +222,9 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
   - **`run`:**
     - `MODES = retrieval.MODES`;
     - `_ask` passes the run's `mode` to `retrieval.search` and to `answer_from_hits`;
-    - the result's `settings` gains `rerank_model` and `rrf_k` in every mode.
-  - **`run.tree_clean()`** lists every untracked file (`--untracked-files=all`) and ignores only untracked `eval/results/*.json`. A tracked change, or any other untracked file, still makes the tree dirty.
+    - the result's `settings` gains `rerank_model` (`rerank.RERANK_MODEL`) and `rrf_k` (`fusion.RRF_K`) in every mode.
+  - **`run.tree_clean()`** lists every untracked file (`--untracked-files=all`) and ignores only untracked `*.json` directly in `dataset.RESULTS_DIR`. A tracked change, or any other untracked file, still makes the tree dirty.
+    - The prefix is `RESULTS_DIR` relative to `dataset.ROOT`, both read when called. When `RESULTS_DIR` is outside `ROOT`, nothing is exempt. That keeps `test_the_git_helpers_read_the_repo_root`, which patches only `ROOT`, from raising.
     - This narrows P2 behaviour 5: an uncommitted result is not code, and without the exception `--mode all` and the sweep could never commit more than one file per SHA.
     - The spec records the change.
   - **`preflight.preflight(limit, modes)`:**
@@ -229,7 +233,7 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
 - Acceptance check: `npm run check:backend` passes, with:
   - `test_chunking.py`: assigning `chunking.CHUNK_TOKENS = 100` changes what `chunk()` returns. `test_defaults` stays as it is;
   - `test_eval_cli.py`:
-    - the spy takes `(limit, modes)`;
+    - the spy and `stopping_preflight` take `(limit, modes)`;
     - the bad-argument case becomes `["--mode", "bogus"]`;
     - `--chunk-tokens 250 --chunk-overlap 25` reaches `chunking` before the preflight, and a fixture restores the module values;
     - an overlap of at least the token count exits 2;
@@ -238,20 +242,29 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
   - `test_eval_run.py`:
     - `test_only_the_vector_mode_runs` becomes "an unknown mode is refused", with `"bogus"`;
     - the exact `settings` dict gains the two keys;
-    - `tree_clean` on a temporary git repository: an untracked `eval/results/x.json` is clean, an untracked `eval/results/x.txt` or `backend/x.py` is dirty, and a modified tracked file is dirty;
+    - `tree_clean` on a temporary git repository:
+      - an untracked `eval/results/x.json` is clean;
+      - an untracked `eval/results/x.txt`, `eval/results/sub/x.json` or `backend/x.py` is dirty;
+      - a modified tracked file is dirty;
+      - the commit is made with `-c user.name=t -c user.email=t@example.com -c commit.gpgsign=false`, since CI runners have no git identity;
   - `test_eval_preflight.py`: `check()` passes the modes, and a `hybrid_rerank` preflight with a failing `rerank.model` stops before `_print_plan`;
   - `test_eval_modes.py`:
     - with `RERANK=off`, `--mode all` and `--mode hybrid_rerank` exit 2 without calling the preflight;
+    - with `RERANK=maybe`, the CLI exits 2 with the settings message and no traceback;
     - `--chunk-tokens 250` reaches the result's `settings.chunk_tokens` and the stored chunks' sizes, with the fakes;
     - a `hybrid` run writes a result whose `mode` is `hybrid`;
     - a `hybrid_rerank` run with `rerank.rerank` replaced by a 50 ms sleep records every `search_ms` at 50 or more;
-    - `--mode all`, with the real `run.evaluate` and the fakes, writes three files to `RESULTS_DIR` with the real `tree_clean`, in a temporary git repository whose results directory starts clean.
+    - `--mode all`, with the real `run.evaluate`, `_scratch_reasons` and `tree_clean` and the fakes, writes three files to `RESULTS_DIR`. The layout:
+      - `repo = tmp_path / "repo"` after `git init`, with one commit;
+      - `dataset.ROOT = repo` and `RESULTS_DIR = repo / "eval" / "results"`;
+      - the inputs and `SCRATCH_DIR` sit outside `repo`;
+      - the setup is borrowed from `test_eval_run.py`'s `ev` fixture, moved to conftest or copied, with the real `tree_clean` restored over its stub;
+      - `git_sha` is stubbed to the fake preflight's SHA.
 - Red first:
   - the new flags are unknown to argparse (exit 2), and `MODES` has only `vector`;
-  - the `tree_clean` case fails on today's rule;
-  - the `--mode all` case writes one file to `RESULTS_DIR` and two to scratch.
-- Redproof: drop the `eval/results/*.json` exception in `tree_clean`. The `--mode all` and temp-repo cases must go red.
-- Predicted size: 10 files, about 260 lines.
+  - the `tree_clean` case fails on today's rule, which counts the untracked `x.json` as dirty.
+- Redproof: drop the `RESULTS_DIR` exception in `tree_clean`. The temp-repo case and the `--mode all` case, which then writes one file to `RESULTS_DIR` and two to scratch, must go red.
+- Predicted size: 10 files, about 280 lines.
 
 ### Phase 3: measurement (main session, paid, each run asks)
 
@@ -268,6 +281,7 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
 
    Nothing is committed and STATUS is not touched until the third run has written its file.
 5. **Decision 0009 and the sweep's commit.**
+   - First check that the three result files carry one `git_sha`, since nothing else forces one SHA now that results are exempt from the clean-tree rule.
    - Decision 0009 sets `CHUNK_TOKENS` and `CHUNK_OVERLAP` by spec behaviour 2. `test_chunking.py::test_defaults` follows the new values.
    - One commit carries the three result files, the decision, the constants, the test, and the ledger rows for steps 2 to 4, each run with its cost from its `usage` block.
    - Then `npm run check:all` passes and the commit is pushed.
@@ -281,6 +295,8 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
    - the `Dockerfile` gets `ENV FASTEMBED_CACHE_PATH=/app/fastembed` and a build line `python -c "from loreos import rerank; rerank.model()"`, placed before `USER`;
    - `scripts/compose-check.yml` sets `HF_HUB_OFFLINE=1` for the api, so a failed bake cannot pass by downloading at startup;
    - `npm run check:compose` passes, run in its own CI job.
+
+   Whatever the default becomes, `npm run check:all` runs after the change. A default other than `vector` makes the ask tests and `test_smoke.py`'s real preflight serve through that mode, and with `RERANK=on` pinned, `hybrid_rerank` loads the real model. Any test that assumes vector serving is fixed red first, or conftest pins `retrieval.DEFAULT_MODE` with a note, before the push.
 8. **The hybrid run's misses.** Read them for Hugo shortcode tokens among keyword search's false hits, which is the KNOWN-GAPS trigger. A shortcode found among them becomes a finding in STATUS.
 9. **The database size.** `select pg_size_pretty(pg_database_size(current_database()))` is free, and its result goes in STATUS. Pruning old `eval-*` workspaces waits for the operator's yes.
 10. **The README line** stating which mode measured the chunk size is P5's: P5 writes the README, and this note in STATUS hands it over by name.
