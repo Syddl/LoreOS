@@ -20,6 +20,20 @@ NEAREST = text(
     limit :k
     """
 )
+# Any of the question's lexemes, not all: plainto_tsquery stems the question once, drops its punctuation and ANDs the
+# lexemes; its text form quotes each lexeme and parses back unchanged, and a lexeme holds no space, so turning ' & '
+# into ' | ' changes only the operators. Stop words alone give an empty query (numnode 0), which matches nothing.
+KEYWORD = text(
+    """
+    with q as (select replace(plainto_tsquery('english', :q)::text, ' & ', ' | ')::tsquery as query)
+    select c.id, c.document_id, d.filename, c.heading_path, c.page, c.text, ts_rank_cd(c.tsv, q.query) as score
+    from q, loreos.chunks c
+    join loreos.documents d on d.id = c.document_id and d.workspace_id = c.workspace_id
+    where numnode(q.query) > 0 and c.workspace_id = :w and c.tsv @@ q.query
+    order by score desc, c.id
+    limit :n
+    """
+)
 
 
 @dataclass
@@ -43,4 +57,10 @@ async def search(session: AsyncConnection, workspace_id: uuid.UUID, query: str, 
         return []
     [vector] = await llm.embed([query])
     rows = await session.execute(NEAREST, {"q": vector_literal(vector), "w": workspace_id, "k": k})
+    return [Hit(*row) for row in rows]
+
+
+async def keyword_search(session: AsyncConnection, workspace_id: uuid.UUID, query: str, n: int) -> list[Hit]:
+    """Up to n chunks holding any lexeme of the query, by ts_rank_cd, best first. Free: no embedding."""
+    rows = await session.execute(KEYWORD, {"q": query, "w": workspace_id, "n": n})
     return [Hit(*row) for row in rows]

@@ -99,3 +99,22 @@ def test_every_key_settings_reads_is_pinned_for_the_tests():
     read = set(re.findall(r'_env\("([A-Z_]+)"\)', Path(settings.__file__).read_text(encoding="utf-8")))
     assert read == set(PINNED_ENV)
     assert {key: os.environ[key] for key in read} == PINNED_ENV
+
+
+def test_tsv_is_generated_from_the_heading_path_and_the_text(clean):
+    doc = sql(INSERT_DOCUMENT, w=DEFAULT_WORKSPACE_ID, f="a.md", k="md", s="x", c=b"x")[0][0]
+    sql(
+        "insert into loreos.chunks (workspace_id, document_id, ordinal, text, heading_path, token_count, embedding) "
+        "values (:w, :d, 0, 'Deploys happen on Tuesdays.', array['Release process', 'Cadence'], 1, cast(:e as vector))",
+        w=DEFAULT_WORKSPACE_ID,
+        d=doc,
+        e=VECTOR,
+    )
+    [(lexemes,)] = sql("select tsvector_to_array(tsv) from loreos.chunks where document_id = :d", d=doc)
+    assert {"releas", "process", "cadenc", "deploy", "tuesday"} <= set(lexemes)
+
+
+def test_tsv_has_a_gin_index(db):
+    assert sql("select indexdef from pg_indexes where schemaname = 'loreos' and indexname = 'chunks_tsv'") == [
+        ("CREATE INDEX chunks_tsv ON loreos.chunks USING gin (tsv)",)
+    ]

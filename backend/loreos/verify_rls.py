@@ -56,6 +56,10 @@ CHECKS = {
         "loreos_app lacks USAGE on the schema that holds vector, so the vector cast fails after the embedding is paid for; "
         "grant usage on that schema to loreos_app"
     ),
+    "heading_text": (
+        "loreos_app cannot execute loreos.heading_text, which computes chunks.tsv, so every chunk insert fails after its "
+        "embedding is paid for; run npm run db:migrate, or: grant execute on function loreos.heading_text(text[]) to loreos_app"
+    ),
 }
 
 # pg_get_expr's rendering of migration 0002's ISOLATION, the condition each policy must use and check.
@@ -100,7 +104,10 @@ ASSERTIONS = text(
         pg_has_role(current_user, r.oid, 'SET') as set_option,
         coalesce(has_schema_privilege(r.oid, to_regnamespace('loreos'), 'USAGE'), false) as schema,
         coalesce((select has_schema_privilege(r.oid, e.extnamespace, 'USAGE') from pg_extension e where e.extname = 'vector'), false)
-            as vector_schema
+            as vector_schema,
+        -- null, so false, when migration 0003 has not run
+        coalesce(has_function_privilege(r.oid, to_regprocedure('loreos.heading_text(text[])'), 'EXECUTE'), false)
+            as heading_text
     from pg_roles r where r.oid = :role
     """
 )

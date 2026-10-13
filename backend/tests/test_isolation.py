@@ -242,6 +242,15 @@ NEGATIVES = [
         {"vector_schema"},
         id="vector-usage",
     ),
+    # PUBLIC holds execute on a new function by default, and has_function_privilege counts that grant.
+    pytest.param(
+        [
+            "revoke execute on function loreos.heading_text(text[]) from loreos_app",
+            "revoke execute on function loreos.heading_text(text[]) from public",
+        ],
+        {"heading_text"},
+        id="heading-text-execute",
+    ),
 ]
 
 
