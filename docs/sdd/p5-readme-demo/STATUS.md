@@ -24,23 +24,35 @@ The single carrier of state between sessions. Update it before a session ends; t
   | 1.2 | `f20b0e6` | `loreos.demo` and `paid:demo-load` (13 tests), `preflight.check_models(models)` shared with the evaluation, the pins in `test_auth.py` and `test_isolation.py`, and 2 `check-spend` cases | the pins red first; redproofs: the `eval-` refusal and the owner refusal |
   | 1.3 | `a197225` | the README, decision 0011, the AGENTS.md line, KNOWN-GAPS (the spend-guard and shortcode rows), and the `eval/README.md` wording | `check:readme` green; the prose is a review item |
 
+- **Phase 2, live:**
+  - **The demo load is done.** The operator created the "Demo" workspace in the UI. Its id is kept out of this file, since the repo goes public.
+    - **The dry run** passed every preflight step: 48 files and 195,274 tokens to embed.
+    - **The paid load** processed all 48 files, at about $0.004.
+    - **The second run** found 48 of 48 files present and planned 0 files and 0 tokens, so it spent nothing.
+    - Logs: `scratch/demo-dry.log`, `scratch/demo-load.log` and `scratch/demo-load-2.log`.
+  - **The README was rewritten for a public repo** (`81c657b`), at the operator's request. It gained:
+    - badges and a feature list;
+    - a Mermaid diagram of ingest and ask;
+    - a contributing and a security section.
+
+    `check:readme` passes, 29 of 29.
+  - **The pre-publication scan**, read-only: the tracked files and the whole git history hold no API key, password, connection string, Supabase host or `.env`. Commit metadata carries the operator's personal email, and the operator was told.
+  - **The recording is open.** The Claude in Chrome extension was not connected, and the operator chose to connect it.
+
 ## Next step
 
-Phase 2:
-1. claim-green;
-2. the operator creates the "Demo" workspace and gives its id;
-3. `paid:demo-load`, as a dry run, then the paid run, then the run again;
-4. the recording.
+Open the PR. The recording is still to come, when the extension connects, and so is the step 9 independent whole-branch review. Merging is the operator's call.
 
 ## Blockers
 
-None. The live phase needs the operator twice: to create the "Demo" workspace and give its id, and to log in for the recording.
+The recording waits on the browser extension.
 
 ## Verification ledger
 
 | date | branch | sha | suite | result | duration | not covered |
 |---|---|---|---|---|---|---|
 | 2026-10-14T14:45:00.607Z | p5-readme-demo | 6db4b7dc | `npm run check:all` | PASS | 348.1 s | the live demo load (paid) and the recording; check:compose (its own CI job); CI on Linux |
+| 2026-10-14 (by hand, live) | p5-readme-demo | 9e9160d | `npm run paid:demo-load -- --workspace-id <Demo> --dry-run`, then the paid run, then the run again, each approved at the ask | PASS | | The dry run planned 48 files and 195,274 tokens. The load processed 48 of 48, about $0.004. The second run planned 0 files and 0 tokens. Not covered: the UI showing them (the recording) |
 
 ## Port ledger
 
