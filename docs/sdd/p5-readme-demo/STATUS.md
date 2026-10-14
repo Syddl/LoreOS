@@ -39,9 +39,18 @@ The single carrier of state between sessions. Update it before a session ends; t
   - **The pre-publication scan**, read-only: the tracked files and the whole git history hold no API key, password, connection string, Supabase host or `.env`. Commit metadata carries the operator's personal email, and the operator was told.
   - **The recording is open.** The Claude in Chrome extension was not connected, and the operator chose to connect it.
 
+- **Steps 9 to 12:**
+  - **[PR #9](https://github.com/Syddl/LoreOS/pull/9)** is open. CI on `a3bbb8c` passed both jobs, Checks and Compose.
+  - **The independent whole-branch review** ([reviews/branch.md](reviews/branch.md)) returned **merge**. It ran `check:all` twice, both green (810 backend tests), and compared every cell of the table with the result files by hand.
+  - **The fix wave** `25ba051`, with redproofs PASS:
+    - **The check-readme fixtures** carry different values per mode, with a literal line for every row (a row filled from the first file goes red). They add refusal cases for mixed calibration rows and mixed settings. 32 checks.
+    - **`test_demo.py`** gains a failing-file case: the run goes on, and exits 1 (dropping the count goes red).
+    - **The README:** an owner creates keys; the demo needs uv; the api and the worker also spend; the dev steps need their own terminals; and a bullet on the CC BY-SA excerpts.
+  - **Left to the operator:** turning on private vulnerability reporting before going public, and whether to scrub machine paths from older docs.
+
 ## Next step
 
-Open the PR. The recording is still to come, when the extension connects, and so is the step 9 independent whole-branch review. Merging is the operator's call.
+claim-green on the fix wave's tip, and CI on PR #9. Then the operator merges. The recording follows in its own PR, once the browser extension connects.
 
 ## Blockers
 
