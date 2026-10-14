@@ -81,16 +81,34 @@ The single carrier of state between sessions. Update it before a session ends; t
   - **Step 5 done.** [Decision 0009](../../decisions/0009-chunk-size-500-overlap-50.md) keeps 500/50, which ties 1000/100 on Recall@5 at 0.909 and wins on MRR@10, with 0.825 against 0.766.
     - `chunking.py` is not edited, not even its comment. Its source keys the evaluation workspace, so the `--mode all` run reuses `eval-093199cc80a6` and pays no corpus embedding.
     - `test_defaults` still pins 500/50.
-  - **Step 6 next:** `--mode all` at the commit that records this, run id `compare-all`, log `scratch/compare-all.log`. Estimate: three runs like `sweep-500` without its corpus embedding, about $0.13 each, so about $0.38. The dry run gives the upper bound.
+  - **Step 6 done**, with one environment failure and its retry, all at `c221b3a` on workspace `eval-093199cc80a6` (reused, so no corpus embedding). The dry run's upper bound was $0.85.
+    - **`compare-all`** wrote the `vector` and `hybrid` files to `eval/results/`, then died at `hybrid_rerank` question 51 of 81.
+      - **Triage:** environment. The host shut down uncleanly: the System log has Kernel-Power 41 and EventLog 6008, the run's log was last written at 10:52:59 UTC, and the host was back at 12:04 UTC, then took three Windows Update restarts.
+      - **The output:** it was a hard kill, so no partial result was written. That part's spend, about $0.09, is estimated, since no usage was recorded.
+      - **Notes:** `scratch/compare-retry-note.txt`.
+    - **`compare-rerank-retry`** reran `--mode hybrid_rerank` alone at the same commit, so the two finished modes were not billed again. Its file went to `eval/results/`.
+    - **The three rows:**
+
+      | Mode | Recall@5 | MRR@10 | Citation accuracy | Faithfulness | Search p50 / p95 | Cost |
+      |---|---|---|---|---|---|---|
+      | vector | 0.909 | 0.825 | 0.709 | 0.918 | 1306 / 2112 ms | $0.1251 |
+      | hybrid | 0.864 | 0.682 | 0.644 | 0.855 | 1599 / 2151 ms | $0.1545 |
+      | hybrid_rerank | 0.924 | 0.855 | 0.759 | 0.968 | 3655 / 6079 ms | $0.1383 |
+
+    - **The spend for P3's runs is about $0.89**, so the total to date is about $1.17 of $5. No paid run remains in P3.
+  - **Step 8, the hybrid run's misses.**
+    - **Hybrid against vector:** hybrid ranks the first relevant chunk lower than vector on 20 answerable questions, and higher on 7 (`scratch/vector-vs-hybrid.txt`). The usual cause is a sibling section of the same document, whose heading path shares the question's words. Keyword search ranks it high, and equal-weight RRF lifts it over vector's first hit.
+    - **Shortcodes:** 88 of 920 chunks hold a Hugo shortcode. Shortcode chunks fill about the same share of the top 5 in each mode: 36, 42 and 34 of 405 top-5 hits, of which 29, 37 and 27 are not relevant (`scratch/shortcodes.txt`). The KNOWN-GAPS trigger is met only marginally, by 8 extra hits in hybrid, so the row stays as it is.
+    - **The reranked mode against vector:** it is better on 12 questions and worse on 11 (`scratch/vector-vs-rerank.txt`). It finds q053 (rank 3) and q061 (rank 1), which vector never retrieved.
   - **For P5** (step 10): the README states that the chunk size was measured in `vector` mode, citing decision 0009.
 
 ## Next step
 
-Phase 3 step 6: `npm run paid:eval -- --mode all`, dry run first. Then decision 0010.
+Phase 3 step 7: decision 0010 (`DEFAULT_MODE = hybrid_rerank` by behaviour 9), the image bake, `HF_HUB_OFFLINE` in the compose check, and `check:all` after the switch.
 
 ## Blockers
 
-None. Building the code costs nothing. The four paid runs (the chunk sweep, then `--mode all`) each ask, with a priced estimate, under the $5 cap of decision 0005.
+None. Every paid run in P3 is done.
 
 ## Verification ledger
 
@@ -103,6 +121,9 @@ None. Building the code costs nothing. The four paid runs (the chunk sweep, then
 | 2026-10-14 (by hand, live) | p3-hybrid-search | 22688ae | `sweep-250`, approved at the ask; `scratch/sweep-250.log` | PASS (to `eval/results/`) | | `20261014T092118Z-vector-22688aeb.json`: Recall@5 0.894, MRR@10 0.795, faithfulness 0.935, judge agreement 1.0. Cost $0.1058 (likely $0.09, upper $0.20) |
 | 2026-10-14 (by hand, live) | p3-hybrid-search | 22688ae | `sweep-500`, approved at the ask; `scratch/sweep-500.log` | PASS (to `eval/results/`) | | `20261014T094653Z-vector-22688aeb.json`: Recall@5 0.909, MRR@10 0.825 (the same as P2's baseline), faithfulness 0.871. Cost $0.1310 (likely $0.13, upper $0.29) |
 | 2026-10-14 (by hand, live) | p3-hybrid-search | 22688ae | `sweep-1000`, approved at the ask; `scratch/sweep-1000.log` | PASS (to `eval/results/`) | | `20261014T101001Z-vector-22688aeb.json`: Recall@5 0.909, MRR@10 0.766, faithfulness 0.889. Cost $0.1462 (likely $0.20, upper $0.47). The sweep's total is $0.383. Not covered: chunk size in the hybrid modes; the answer model's variance (one run each) |
+| 2026-10-14 (by hand, live) | p3-hybrid-search | c221b3a | `npm run paid:eval -- --mode all --dry-run`, approved at the ask; `scratch/dry-all.log` | PASS | | The workspace was reused (0 corpus tokens). 243 answer and 333 judge calls, with an upper bound of about $0.85. No paid call |
+| 2026-10-14 (by hand, live) | p3-hybrid-search | c221b3a | `compare-all` (`--mode all`), approved at the ask; `scratch/compare-all.log` | PARTIAL: 2 of 3 modes to `eval/results/`; FAIL (environment) on the third | | `20261014T103002Z-vector-c221b3a3.json`: Recall@5 0.909, MRR@10 0.825, $0.1251. `20261014T104308Z-hybrid-c221b3a3.json`: Recall@5 0.864, MRR@10 0.682, $0.1545. `hybrid_rerank` died at question 51 of 81 in an unclean host shutdown (Kernel-Power 41), with no partial file, about $0.09 lost |
+| 2026-10-14 (by hand, live) | p3-hybrid-search | c221b3a | `compare-rerank-retry` (`--mode hybrid_rerank`), approved at the ask; `scratch/compare-rerank-retry.log` | PASS (to `eval/results/`) | | `20261014T123854Z-hybrid_rerank-c221b3a3.json`: Recall@5 0.924, MRR@10 0.855, faithfulness 0.968, search p50 3655 ms. Cost $0.1383. Not covered: latency on a deploy host; concurrent questions |
 
 ## Port ledger
 
