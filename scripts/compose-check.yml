@@ -18,7 +18,10 @@ services:
   api:
     image: loreos-check:local
     env_file: !reset []
-    environment: *check-env
+    # No model download at startup: the api must load the reranker the image baked, or fail to start.
+    environment:
+      <<: *check-env
+      HF_HUB_OFFLINE: "1"
     ports: !override
       - "127.0.0.1:18000:8000"
 

@@ -73,7 +73,7 @@ def allowed_hosts() -> list[str]:
 
 
 def rerank_on() -> bool:
-    """The kill switch for the local reranker (spec P3): off serves the fused order where hybrid_rerank would run."""
+    """The kill switch for the local reranker (decision 0010): off serves vector search where hybrid_rerank would run."""
     value = (_env("RERANK") or DEFAULT_RERANK).lower()
     if value not in ("on", "off"):
         raise RuntimeError("RERANK must be on or off; fix it in .env")

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from loreos import fusion, llm, rerank, settings
 
 MODES = ("vector", "hybrid", "hybrid_rerank")
-DEFAULT_MODE = "vector"  # decision 0010 sets it from the committed comparison
+DEFAULT_MODE = "hybrid_rerank"  # decision 0010, from the committed three-mode comparison
 FUSE_DEPTH = 50  # hits taken from each ranking before fusion
 RERANK_DEPTH = 30  # fused candidates the cross-encoder rescores
 
@@ -62,9 +62,12 @@ def vector_literal(vector: list[float]) -> str:
 
 
 def serving_mode() -> str:
-    """The mode the api answers with: DEFAULT_MODE, or hybrid when that is hybrid_rerank and RERANK=off."""
+    """The mode the api answers with: DEFAULT_MODE, or vector when that is hybrid_rerank and RERANK=off.
+
+    vector, not hybrid: without the reranker, fusion measured worse than vector search alone (decision 0010).
+    """
     if DEFAULT_MODE == "hybrid_rerank" and not settings.rerank_on():
-        return "hybrid"
+        return "vector"
     return DEFAULT_MODE
 
 

@@ -101,8 +101,10 @@ def test_preflight_stops_on_a_reranker_that_cannot_load_before_anything_is_paid(
     assert listed == []
 
 
-def test_preflight_never_loads_the_reranker_when_the_api_would_not_use_it(db, listed, monkeypatch):
-    monkeypatch.setattr(rerank, "model", lambda: pytest.fail("loaded the reranker for vector serving"))
-    assert retrieval.serving_mode() != "hybrid_rerank"
+@pytest.mark.parametrize("default, switch", [("vector", "on"), ("hybrid", "on"), ("hybrid_rerank", "off")])
+def test_preflight_never_loads_the_reranker_when_the_api_would_not_use_it(db, listed, monkeypatch, default, switch):
+    monkeypatch.setattr(retrieval, "DEFAULT_MODE", default)
+    monkeypatch.setenv("RERANK", switch)
+    monkeypatch.setattr(rerank, "model", lambda: pytest.fail(f"loaded the reranker for {retrieval.serving_mode()} serving"))
     asyncio.run(smoke.preflight())
     assert listed == ["models"]

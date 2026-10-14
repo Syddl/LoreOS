@@ -1,5 +1,6 @@
 // check-compose: the image builds, `docker compose up` migrates and starts the api and the worker, the api
-// answers /api/health and serves the UI at / and /login, and no .env reaches the image. It runs under its
+// answers /api/health and serves the UI at / and /login, and no .env reaches the image. The api starts with
+// HF_HUB_OFFLINE=1 and loads the reranker at startup, so a healthy api proves the image baked the model. It runs under its
 // own project (loreos-check) with scripts/compose-check.yml: its own database, a fake OpenAI key and an
 // unroutable base URL, asserted from the resolved config before anything starts. In CI and on its own,
 // not in check:all: it builds the image every run.
@@ -46,6 +47,8 @@ async function main() {
   }
   // The worker spends, so Docker must never start it on its own.
   if (services.worker?.restart !== 'no') fail(`the worker's restart policy is ${services.worker?.restart}, not "no"`);
+  // The api loads the reranker at startup; offline, a healthy api proves the image baked it (decision 0010).
+  if (services.api?.environment?.HF_HUB_OFFLINE !== '1') fail('the api would start with network access for the reranker model, not HF_HUB_OFFLINE=1');
   console.log('  ok   the resolved config points every service at checkdb, a fake key and an unroutable OpenAI URL,');
   console.log('       builds loreos-check:local, and never restarts the worker on its own');
 

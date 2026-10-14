@@ -1,6 +1,7 @@
 """The RERANK kill switch and where the reranker model loads, with DEFAULT_MODE set to hybrid_rerank.
 
-Proves: RERANK=off answers through hybrid, says so in the ask response, and never loads or runs the reranker; with
+Proves: RERANK=off answers through vector search (decision 0010: hybrid alone measured worse than vector), says so
+in the ask response, and never loads or runs the reranker or keyword search; with
 RERANK=on the api loads the model at startup and refuses to start, naming RERANK=off, when it cannot; the worker
 starts without loading it; a RERANK value other than on or off stops the api and the worker.
 Does NOT exercise: the real model (tests/test_rerank.py), or a real download failure (the load is faked to fail).
@@ -47,9 +48,14 @@ def serve(monkeypatch):
     return calls
 
 
-def test_rerank_off_answers_through_hybrid_and_says_so(owner, fake_embed, fake_draft, rerank_default, no_model, monkeypatch):
+def test_rerank_off_answers_through_vector_search_and_says_so(owner, fake_embed, fake_draft, rerank_default, no_model, monkeypatch):
     monkeypatch.setenv("RERANK", "off")
     monkeypatch.setattr(rerank, "rerank", lambda query, hits: pytest.fail("reranked with RERANK=off"))
+
+    async def no_keyword(*args):
+        pytest.fail("keyword search ran with RERANK=off")
+
+    monkeypatch.setattr(retrieval, "keyword_search", no_keyword)
     doc = sql(
         "insert into loreos.documents (workspace_id, filename, kind, sha256, content, status) "
         "values (:w, 'releases.md', 'md', 'x', 'x', 'processed') returning id",
@@ -64,7 +70,7 @@ def test_rerank_off_answers_through_hybrid_and_says_so(owner, fake_embed, fake_d
     )
     fake_draft.reply = llm.Draft(found=True, text="On Tuesdays [1].")
     body = owner.client.post(f"{W}/ask", json={"question": "When do we ship?"}).json()
-    assert (body["found"], body["retrieval_mode"]) == (True, "hybrid")
+    assert (body["found"], body["retrieval_mode"]) == (True, "vector")
     assert no_model == []
 
 

@@ -6,7 +6,7 @@ Phase P3 of [the v1 brief](../v1/brief.md). The draft was written before P1 star
 
 P3 settles the default chunk size and overlap by measurement. It then adds keyword search (Postgres full-text search), merged with vector search by reciprocal rank fusion (RRF), and a local cross-encoder reranker run through fastembed on the CPU.
 Every step leaves a committed result file, and the mode the server uses by default is the one the results support.
-Kill switch: `RERANK=off` skips the reranker and serves the fused order. It covers the operational risks: CPU, memory and the model download on a small host.
+Kill switch: `RERANK=off` skips the reranker and serves vector search alone (decision 0010; the draft said the fused order). It covers the operational risks: CPU, memory and the model download on a small host.
 
 ## Interfaces
 
@@ -17,7 +17,7 @@ Kill switch: `RERANK=off` skips the reranker and serves the fused order. It cove
 | `rrf(rankings, k=RRF_K) -> list[tuple[uuid, float]]` | function | `backend/loreos/fusion.py` | Pure, with `RRF_K = 60`. A chunk's score is the sum of 1 / (k + rank) over the rankings it appears in, summed exactly. Ties break by the best single rank, then by chunk id, so the order is deterministic. It returns each id with its score, best first. |
 | `rerank(query, hits) -> list[Hit]` | function | `backend/loreos/rerank.py` | Synchronous. It uses fastembed's `TextCrossEncoder`, with the model named in `RERANK_MODEL` in this file. `model()` loads it once per process. |
 | `search(session, workspace_id, query, k, mode)` | function | `backend/loreos/retrieval.py` | `mode` is `vector`, `hybrid` or `hybrid_rerank`, and the function runs exactly that mode. `DEFAULT_MODE` lives in this file. |
-| `serving_mode() -> str` | function | `backend/loreos/retrieval.py` | Returns `DEFAULT_MODE`, or `hybrid` when the default is `hybrid_rerank` and `RERANK=off`. |
+| `serving_mode() -> str` | function | `backend/loreos/retrieval.py` | Returns `DEFAULT_MODE`, or `vector` when the default is `hybrid_rerank` and `RERANK=off` (decision 0010). |
 | `RERANK` | env | `backend/loreos/settings.py` | `on`, the default, or `off`. Any other value is a startup problem that names the fix. |
 | `Answer.retrieval_mode` | field | `backend/loreos/answering.py` | The mode that served the answer. `POST /api/ask` returns it through the route's existing field mapping. |
 | `--mode vector\|hybrid\|hybrid_rerank\|all`, `--chunk-tokens N`, `--chunk-overlap N` | CLI flags | `python -m loreos.evaluation` | `all` runs the three modes from one SHA and writes three result files. The chunk flags set the chunker's budget for the run, so they feed the evaluation workspace key and the result's `settings`. npm swallows each one when it is given before `--`, so they join `NPM_SWALLOWED`. |
@@ -52,7 +52,7 @@ Kill switch: `RERANK=off` skips the reranker and serves the fused order. It cove
      - a corrupt cache is fixed by deleting the cache directory it names;
      - `RERANK=off` serves without the reranker.
    - The worker never searches, so it never loads the model.
-   - With `RERANK=off`, answers are served by `hybrid`, and `retrieval_mode` says `hybrid`.
+   - With `RERANK=off`, answers are served by `vector`, and `retrieval_mode` says `vector`. The draft said `hybrid`. Decision 0010 changed it, because `hybrid` measured worse than `vector`.
 7. The evaluation keeps every result file's mode label true:
    - With `RERANK=off`, it refuses `--mode hybrid_rerank` and `--mode all` before the preflight, so a file is never labelled with a mode it did not run.
    - For those two modes, the preflight loads the model. The load is free, and it runs before any paid call, so a missing network stops the run before it spends.
@@ -72,7 +72,7 @@ Kill switch: `RERANK=off` skips the reranker and serves the fused order. It cove
 | 3 | Fusion | `tests/test_fusion.py` | A hand-computed RRF order, with stable ties. | |
 | 3, 4 | Modes | `tests/test_retrieval.py` | `hybrid` returns a chunk that only keyword search found. `hybrid_rerank` reorders by a fake scorer and keeps the top `k`. A workspace without chunks buys no embedding in any mode. | |
 | 4, 5 | Reranker | `tests/test_rerank.py` | The real model scores a relevant pair above an irrelevant one. The first run downloads the model, which is free. | Latency on the deploy host |
-| 6 | Kill switch and startup | `tests/test_rerank_switch.py` | `RERANK=off` serves `hybrid`, and the ask response says so. With `on` and a broken cache, the api refuses to start with the message. The worker starts without loading the model. A bad `RERANK` value is a startup problem. | |
+| 6 | Kill switch and startup | `tests/test_rerank_switch.py` | `RERANK=off` serves `vector`, running neither the reranker nor keyword search, and the ask response says so. With `on` and a broken cache, the api refuses to start with the message. The worker starts without loading the model. A bad `RERANK` value is a startup problem. | |
 | 6 | Ask response | `tests/test_ask_api.py` | `retrieval_mode` is in the response. | |
 | 7 | Honest labels | `tests/test_eval_cli.py`, `tests/test_eval_run.py` | `--mode all` and `--mode hybrid_rerank` with `RERANK=off` stop before the preflight. A chunk flag before `--` is refused with the separator form. The chunk flags change the workspace key and the result's `settings`. | |
 | 5 | Licenses | `npm run check:licenses` | fastembed's tree passes; tqdm passes under decision 0007. | |
@@ -94,7 +94,7 @@ That is about $0.85 to $1.05 in all, or $1.25 with one rerun.
 
 ## Kill switch
 
-`RERANK=off`, which defaults to `on`. The reranker adds CPU, memory and a model download to every host. When that is wrong for a host, `off` restores the fused order without a deploy. `DEFAULT_MODE` is `hybrid_rerank` only if the committed results show a gain under behaviour 9. Otherwise it is `hybrid` or `vector`, and the reranker stays measurable but unused, so the api never loads it.
+`RERANK=off`, which defaults to `on`. The reranker adds CPU, memory and a model download to every host. When that is wrong for a host, `off` serves vector search alone, the best mode measured without the reranker, without a deploy. `DEFAULT_MODE` is `hybrid_rerank` only if the committed results show a gain under behaviour 9. Otherwise it is `hybrid` or `vector`, and the reranker stays measurable but unused, so the api never loads it.
 
 ## Not changing
 

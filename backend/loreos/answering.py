@@ -34,7 +34,7 @@ class Answer:
     text: str
     citations: list[Citation]
     reason: str | None
-    retrieval_mode: str  # the mode that found the hits; with RERANK=off it says hybrid where hybrid_rerank was the default
+    retrieval_mode: str  # the mode that found the hits; with RERANK=off it says vector where hybrid_rerank is the default
 
 
 async def answer(session: AsyncConnection, workspace_id: uuid.UUID, question: str) -> Answer:
