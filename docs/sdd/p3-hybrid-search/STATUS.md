@@ -1,5 +1,5 @@
 ---
-status: open
+status: done
 feature: p3-hybrid-search
 ---
 
@@ -134,17 +134,24 @@ The single carrier of state between sessions. Update it before a session ends; t
       - the plan's two lines about the fallback;
       - the CI comment;
       - the KNOWN-GAPS rows on the reranker and the `eval-*` workspaces.
+  - **Steps 11 to 13:**
+    - claim-green PASS on the pushed tip `3573ff3a`; the tip `2b3d9b9` adds only that ledger row, and `--verify-tip` exits 0;
+    - [PR #7](https://github.com/Syddl/LoreOS/pull/7), whose CI on Linux passed both jobs, Checks and Compose;
+    - merged into `main` as **`ac29c39`**, a merge commit;
+    - this file closed from `p3-close`.
+  - **The operator's decisions, 2026-10-14:**
+    - **Merge as is.** Decision 0010 stands: `hybrid_rerank` is the default, and `RERANK=off` serves `vector`.
+    - **The three unused `eval-*` workspaces are kept.** At 93 MB of the free tier's 500 MB, the KNOWN-GAPS trigger "nears its plan's size limit" is not met.
+    - **No chunk re-sweep in `hybrid_rerank` mode.** Decision 0009 stands. The README says the size was measured in `vector` mode.
+- **The final spend** is about $1.17 of the $5 cap: $0.28 before P3, and about $0.89 in P3, including about $0.09 lost with the host.
 
 ## Next step
 
-Phase 4: claim-green on the fix wave's pushed tip, the PR, and CI. Merge only on the operator's yes.
+None. P3 is done. P5 (the README and the demo) is next. Its README takes the comparison from decision 0010's files, and states the chunk size's mode and the judge's calibration source.
 
 ## Blockers
 
-None. Every paid run in P3 is done. The operator decides three things:
-1. **The default and the fallback** (decision 0010): `hybrid_rerank`, and `RERANK=off` serving `vector`.
-2. **Pruning the three unused `eval-*` workspaces**, which deletes data.
-3. **Whether to re-sweep chunk size in `hybrid_rerank` mode**, about $0.40. Decision 0009's reopen condition is half met now that the default is not `vector`. The default is to skip it: the 512-token reranker cut favours 500-token chunks anyway.
+None.
 
 ## Verification ledger
 
@@ -163,9 +170,10 @@ None. Every paid run in P3 is done. The operator decides three things:
 | 2026-10-14 (by hand) | p3-hybrid-search | 7b278eb | `npm run check:compose` locally (its own CI job), after a retry: the first build hit a Docker Hub TLS timeout; `scratch/check-compose.log` | PASS | | The api is healthy with `HF_HUB_OFFLINE=1`, and the image is 324 MB. Redproof (an empty `/app/fastembed`, so no model) PASS: the api fails at startup. Not covered: CI's run of the same job |
 | 2026-10-14T13:03:31.008Z | p3-hybrid-search | 7b278eb6 | `npm run check:all` | PASS | 345.3 s | check:compose (its own CI job; run locally and redproved by hand); real OpenAI and Supabase (the paid runs are ledger rows); CI on Linux |
 | 2026-10-14T13:30:49.524Z | p3-hybrid-search | 3573ff3a | `npm run check:all` | PASS | 337.1 s | check:compose (its own CI job; run locally by hand at this tree); real OpenAI and Supabase (the paid runs are ledger rows); CI on Linux |
+| 2026-10-14T13:45:05.312Z | p3-close | 02189532 | `npm run check:all` | PASS | 334.2 s | docs only: STATUS closed and one KNOWN-GAPS row; nothing the suite reads changed |
 
 ## Port ledger
 
 | Branch | Status | Reference |
 |---|---|---|
-| main | required | |
+| main | done | `ac29c39` (PR #7, merge commit) |
