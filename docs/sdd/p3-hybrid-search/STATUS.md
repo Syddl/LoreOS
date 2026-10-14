@@ -42,9 +42,23 @@ The single carrier of state between sessions. Update it before a session ends; t
     - **Where the 2.2 cases live.** The CLI cases are in `test_eval_cli.py`, and the run cases in `test_eval_run.py`, which already has the `ev` fixture they need. That replaces the planned `test_eval_modes.py`.
     - **Step 7 (task review)** runs once for phases 1 and 2 together, before any paid run, rather than once per phase. That keeps the tree free while the reviewer runs the suite.
 
+- Step 7, task review of phases 1 and 2 ([reviews/tasks.md](reviews/tasks.md)): **merge**, with 5 minors and 4 nits. The reviewer ran `check:all` green (786 backend tests).
+- **Fix wave** `95b09fa`, red first. Each new case failed before its fix, the NUL one included:
+  - **The license fallback** now accepts a license file only when it names a permissive license (or a copyleft one, which fails).
+  - **`rerank.model()`** turns every load failure into the message with the fixes, the fastembed imports and the cache directory included.
+  - **Keyword search runs before the embedding**, and NUL is replaced.
+  - **`--chunk-tokens`** is capped at 8000.
+  - **A test proves the rerank runs off the event loop.**
+  - **The vector order breaks ties on the chunk id.**
+  - **The result's `settings`** gain `fuse_depth` and `rerank_depth`.
+  - **The latency case** sleeps 0.3 s.
+  - **Spec row 7** names the right files.
+  - **The redproofs** for the thread, the tiebreak and the license fallback all pass.
+  - **The index plan** under RLS moves to phase 3 step 2, against real data on Supabase.
+
 ## Next step
 
-`npm run check:all`, push, claim-green, then the step 7 review of phases 1 and 2 before phase 3's paid runs.
+Phase 3, after the operator's yes: `npm run db:migrate` on Supabase, then the dry runs of the chunk sweep.
 
 ## Blockers
 
