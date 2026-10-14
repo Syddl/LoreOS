@@ -54,6 +54,7 @@ None. Building the code costs nothing. The four paid runs (the chunk sweep, then
 
 | date | branch | sha | suite | result | duration | not covered |
 |---|---|---|---|---|---|---|
+| 2026-10-14T08:34:23.891Z | p3-hybrid-search | 19d2c00e | `npm run check:all` | PASS | 334.7 s | real OpenAI and Supabase (phase 3's paid runs and db:migrate); check:compose (its own CI job); CI on Linux |
 
 ## Port ledger
 
