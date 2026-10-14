@@ -25,11 +25,26 @@ The single carrier of state between sessions. Update it before a session ends; t
   - **First review** of `c9f6cae`: "fix then re-review", with 1 blocker, 2 majors, 12 minors and 6 nits. `check:all` was green, with 712 backend tests. The blocker: an untracked result dirtied the tree, so `--mode all` could commit only one of its three files.
   - **Revision** `840abe1` answers each finding, mapped in the plan's last section.
   - **Re-review** of `840abe1`: **merge**. Its 5 minors and 5 nits are folded in. Step 5 is done.
-- Step 6, implementation: next, task 1.1.
+- Step 6, implementation, done by the main session:
+
+  | Task | Commit | What it adds | Proof (redproof PASS for each) |
+  |---|---|---|---|
+  | 1.1 | `be4261f` | migration `0003_keyword_search` (`tsv`, `loreos.heading_text`, GIN index, execute grant), `keyword_search`, and a `verify_rls` check for the grant | `' \| '` to `' & '` reddens 5 keyword cases; dropping the check reddens its negative |
+  | 1.2 | `6501c7a` | `fusion.rrf`, with exact `Fraction` sums | dropping the best-rank tiebreak reddens the tie case |
+  | 1.3 | `5584229` | fastembed 0.9.0, `rerank.py` (`Xenova/ms-marco-MiniLM-L-6-v2`), the CI model cache | a reversed sort reddens the real-model case |
+  | 2.1 | `17f2847` | modes in `search`, `serving_mode()`, `RERANK`, `Answer.retrieval_mode`, model load at api startup and in `smoke.preflight` | 4 redproofs: the switch, the startup load, the fusion, the smoke load |
+  | 2.2 | `d6d20d9` | `--mode all`, `--chunk-tokens` and `--chunk-overlap`, `chunk()` reading its budget when called, the clean-tree exemption for untracked results, the plan per mode | 4 redproofs: the exemption (twice), the RERANK=off refusal, the call-time budget |
+
+  - **Window A closed:** `check:all` PASS at `5584229` (739 backend tests).
+  - **Deviations from the plan:**
+    - **The license check.** 1.3 also changed `backend/check_licenses.py` and `tests/test_licenses.py`. `py-rust-stemmers` (fastembed's) ships an MIT `licenses/LICENSE` but fills no license field. A package that declares nothing is now judged by the text of the license files it ships, so the copyleft scan reads the real text, and a package with neither still fails.
+    - **New dependencies.** fastembed brings `httpx` and `httpcore` through huggingface-hub, beside P4's `httpx2`. They are unavoidable with fastembed, and all pass `check:licenses`.
+    - **Where the 2.2 cases live.** The CLI cases are in `test_eval_cli.py`, and the run cases in `test_eval_run.py`, which already has the `ev` fixture they need. That replaces the planned `test_eval_modes.py`.
+    - **Step 7 (task review)** runs once for phases 1 and 2 together, before any paid run, rather than once per phase. That keeps the tree free while the reviewer runs the suite.
 
 ## Next step
 
-Task 1.1: migration `0003_keyword_search` and `keyword_search`, red first.
+`npm run check:all`, push, claim-green, then the step 7 review of phases 1 and 2 before phase 3's paid runs.
 
 ## Blockers
 
