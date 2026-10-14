@@ -27,6 +27,9 @@ NPM_SWALLOWED = {
     "chunk-overlap": CHUNK_FORM,
 }
 MIN_CHUNK_TOKENS = 50
+# text-embedding-3-small takes 8191 tokens per input, and ingest adds the heading path to each chunk: over this, ingest
+# would pay for the earlier files' embeddings before the API refused one.
+MAX_CHUNK_TOKENS = 8000
 
 
 def _swallowed() -> str | None:
@@ -39,14 +42,15 @@ def _swallowed() -> str | None:
     return None
 
 
-def _at_least(lowest: int):
+def _at_least(lowest: int, highest: int | None = None):
     def parse(text: str) -> int:
         try:
             value = int(text)
         except ValueError:
             value = lowest - 1
-        if value < lowest:
-            raise argparse.ArgumentTypeError(f"{text!r} is not an integer of at least {lowest}")
+        if value < lowest or (highest is not None and value > highest):
+            span = f"from {lowest} to {highest}" if highest is not None else f"of at least {lowest}"
+            raise argparse.ArgumentTypeError(f"{text!r} is not an integer {span}")
         return value
 
     return parse
@@ -63,7 +67,7 @@ def cli(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="npm run paid:eval --", description="Score retrieval and answers against eval/questions.jsonl.")
     parser.add_argument("--mode", choices=(*run.MODES, "all"), default="vector",
                         help="the retrieval mode, or all to run each of them from one commit (default: vector)")
-    parser.add_argument("--chunk-tokens", type=_at_least(MIN_CHUNK_TOKENS), metavar="N",
+    parser.add_argument("--chunk-tokens", type=_at_least(MIN_CHUNK_TOKENS, MAX_CHUNK_TOKENS), metavar="N",
                         help=f"the chunker's token budget for this run (default: {chunking.CHUNK_TOKENS}, from chunking.py)")
     parser.add_argument("--chunk-overlap", type=_at_least(0), metavar="N",
                         help=f"the overlap between chunks for this run, under the budget (default: {chunking.CHUNK_OVERLAP})")

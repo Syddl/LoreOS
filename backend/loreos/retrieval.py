@@ -26,7 +26,7 @@ NEAREST = text(
     from loreos.chunks c
     join loreos.documents d on d.id = c.document_id and d.workspace_id = c.workspace_id
     where c.workspace_id = :w
-    order by c.embedding <=> cast(:q as vector)
+    order by c.embedding <=> cast(:q as vector), c.id
     limit :k
     """
 )
@@ -75,11 +75,13 @@ async def search(session: AsyncConnection, workspace_id: uuid.UUID, query: str, 
         raise ValueError(f"mode {mode!r} is not one of {', '.join(MODES)}")
     if not await session.scalar(HAS_CHUNKS, {"w": workspace_id}):
         return []
-    [vector] = await llm.embed([query])
     if mode == "vector":
+        [vector] = await llm.embed([query])
         return await _nearest(session, workspace_id, vector, k)
-    nearest = await _nearest(session, workspace_id, vector, FUSE_DEPTH)
+    # Keyword search first: it is free, and a question Postgres refuses then fails before the embedding is bought.
     keyword = await keyword_search(session, workspace_id, query, FUSE_DEPTH)
+    [vector] = await llm.embed([query])
+    nearest = await _nearest(session, workspace_id, vector, FUSE_DEPTH)
     by_id = {hit.chunk_id: hit for hit in [*keyword, *nearest]}
     fused = []
     for chunk_id, score in fusion.rrf([[hit.chunk_id for hit in nearest], [hit.chunk_id for hit in keyword]]):
@@ -98,5 +100,6 @@ async def _nearest(session: AsyncConnection, workspace_id: uuid.UUID, vector: li
 
 async def keyword_search(session: AsyncConnection, workspace_id: uuid.UUID, query: str, n: int) -> list[Hit]:
     """Up to n chunks holding any lexeme of the query, by ts_rank_cd, best first. Free: no embedding."""
-    rows = await session.execute(KEYWORD, {"q": query, "w": workspace_id, "n": n})
+    # Postgres text refuses NUL (22021); as a separator it changes no lexeme.
+    rows = await session.execute(KEYWORD, {"q": query.replace("\x00", " "), "w": workspace_id, "n": n})
     return [Hit(*row) for row in rows]

@@ -69,7 +69,8 @@ def test_a_question_of_stop_words_only_returns_nothing(handbook):
 
 @pytest.mark.parametrize(
     "question",
-    ["tuesdays & mondays", "tuesdays | mondays", "!tuesdays", "tuesdays:*", "tuesday's", "(tuesdays) <-> mondays", "tuesdays\\"],
+    ["tuesdays & mondays", "tuesdays | mondays", "!tuesdays", "tuesdays:*", "tuesday's", "(tuesdays) <-> mondays", "tuesdays\\",
+     "tuesdays\x00"],  # Postgres text refuses NUL (22021)
 )
 def test_punctuation_is_never_query_syntax(handbook, question):
     """Only CHUNKS[1] holds 'tuesday'; parsed as syntax, & would need 'monday' too and ! would exclude it."""

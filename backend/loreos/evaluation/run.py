@@ -152,6 +152,8 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str, preflight_n
                 "k": answering.TOP_K,
                 "search_k": SEARCH_K,
                 "rrf_k": fusion.RRF_K,
+                "fuse_depth": retrieval.FUSE_DEPTH,
+                "rerank_depth": retrieval.RERANK_DEPTH,
                 "rerank_model": rerank.RERANK_MODEL,
                 # The host alone (never the URL, which may carry credentials): it tells an OpenAI run from another server's.
                 "openai_base_url_host": urlsplit(base).hostname if (base := settings.openai_base_url()) else None,

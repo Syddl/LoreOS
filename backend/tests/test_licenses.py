@@ -72,8 +72,10 @@ def test_a_package_with_no_license_field_is_judged_by_the_license_file_it_ships(
     mit = Dist({"License-File": ["LICENSE"]}, {"licenses/LICENSE": "MIT License\n\nCopyright (c) 2024 qdrant\n"})
     gpl = Dist({"License-File": ["COPYING"]}, {"COPYING": "GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n"})
     nothing = Dist({"License-File": ["LICENSE"]}, {})
-    found = problems([("mit", declared(mit)), ("gpl", declared(gpl)), ("nothing", declared(nothing))])
-    assert found == ["gpl: GNU GENERAL PUBLIC LICENSE", "nothing: declares no license"]
+    # setuptools' default license_files globs take AUTHORS and NOTICE too: a file that names no license is no license.
+    authors = Dist({"License-File": ["AUTHORS"]}, {"licenses/AUTHORS": "Alice <alice@example.com>\n"})
+    found = problems([("mit", declared(mit)), ("gpl", declared(gpl)), ("nothing", declared(nothing)), ("authors", declared(authors))])
+    assert found == ["gpl: GNU GENERAL PUBLIC LICENSE", "nothing: declares no license", "authors: declares no license"]
 
 
 def test_a_declared_license_wins_over_the_license_file():

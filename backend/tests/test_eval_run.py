@@ -146,7 +146,8 @@ def test_a_full_run_writes_every_field_to_the_results_dir(ev):
     assert result["settings"] == {
         "embedding_model": settings.embedding_model(), "answer_model": settings.answer_model(), "judge_model": settings.judge_model(),
         "chunk_tokens": chunking.CHUNK_TOKENS, "chunk_overlap": chunking.CHUNK_OVERLAP, "k": 5, "search_k": 10,
-        "rrf_k": 60, "rerank_model": rerank.RERANK_MODEL, "openai_base_url_host": "0.0.0.0",
+        "rrf_k": 60, "fuse_depth": 50, "rerank_depth": 30, "rerank_model": rerank.RERANK_MODEL,
+        "openai_base_url_host": "0.0.0.0",
     }
     the_manifest = dataset.read_manifest(dataset.MANIFEST)
     assert result["corpus_hash"] == dataset.corpus_hash(the_manifest)
@@ -430,12 +431,12 @@ def test_a_hybrid_run_labels_its_result_and_every_answer_with_its_mode(ev, monke
 
 def test_search_ms_covers_the_rerank(ev, monkeypatch):
     def slow(query, hits):
-        time.sleep(0.05)
+        time.sleep(0.3)  # well above a test search's own time, so only the rerank can reach it
         return hits
 
     monkeypatch.setattr(rerank, "rerank", slow)
     rows = load(asyncio.run(run.evaluate("hybrid_rerank", 3, SHA, [])))["questions"]
-    assert len(rows) == 3 and all(row["search_ms"] >= 50 for row in rows)
+    assert len(rows) == 3 and all(row["search_ms"] >= 300 for row in rows)
 
 
 def test_the_chunk_budget_reaches_ingest_the_key_and_the_settings(ev, monkeypatch):

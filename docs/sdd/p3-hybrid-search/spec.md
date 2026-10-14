@@ -74,7 +74,7 @@ Kill switch: `RERANK=off` skips the reranker and serves the fused order. It cove
 | 4, 5 | Reranker | `tests/test_rerank.py` | The real model scores a relevant pair above an irrelevant one. The first run downloads the model, which is free. | Latency on the deploy host |
 | 6 | Kill switch and startup | `tests/test_rerank_switch.py` | `RERANK=off` serves `hybrid`, and the ask response says so. With `on` and a broken cache, the api refuses to start with the message. The worker starts without loading the model. A bad `RERANK` value is a startup problem. | |
 | 6 | Ask response | `tests/test_ask_api.py` | `retrieval_mode` is in the response. | |
-| 7 | Honest labels | `tests/test_eval_modes.py`, `tests/test_eval_cli.py` | `--mode all` and `--mode hybrid_rerank` with `RERANK=off` stop before the preflight. A chunk flag before `--` is refused with the separator form. The chunk flags change the workspace key and the result's `settings`. | |
+| 7 | Honest labels | `tests/test_eval_cli.py`, `tests/test_eval_run.py` | `--mode all` and `--mode hybrid_rerank` with `RERANK=off` stop before the preflight. A chunk flag before `--` is refused with the separator form. The chunk flags change the workspace key and the result's `settings`. | |
 | 5 | Licenses | `npm run check:licenses` | fastembed's tree passes; tqdm passes under decision 0007. | |
 | 2 | Chunk measurement | three `npm run paid:eval -- --mode vector --chunk-tokens ... --chunk-overlap ...` runs (each asks) | Three committed result files, one SHA, and decision 0009. Ledger rows by hand. | Chunk size for the hybrid modes |
 | 9 | Comparison | `npm run paid:eval -- --mode all` (asks) | Three committed result files sharing the SHA, the corpus hash and the question hash, and decision 0010. | |

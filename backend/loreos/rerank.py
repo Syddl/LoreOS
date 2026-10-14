@@ -21,14 +21,19 @@ RERANK_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2"
 
 @functools.cache
 def model() -> TextCrossEncoder:
-    """The cross-encoder, loaded once per process; downloads it on first use. Raises RuntimeError with the fix."""
-    from fastembed.common.utils import define_cache_dir
-    from fastembed.rerank.cross_encoder import TextCrossEncoder
+    """The cross-encoder, loaded once per process; downloads it on first use. Raises RuntimeError with the fix.
 
-    cache = define_cache_dir()  # FASTEMBED_CACHE_PATH, else a fastembed_cache folder in the temp directory
+    A failed load is not cached, so the next call tries again. Every caller (the api's startup, smoke's and the
+    evaluation's preflights) catches RuntimeError alone, so every failure becomes one, imports included.
+    """
+    cache = "fastembed's cache directory (FASTEMBED_CACHE_PATH, else fastembed_cache in the temp directory)"
     try:
+        from fastembed.common.utils import define_cache_dir
+        from fastembed.rerank.cross_encoder import TextCrossEncoder
+
+        cache = str(define_cache_dir())  # creates it, so an unwritable path fails here
         return TextCrossEncoder(RERANK_MODEL)
-    except Exception as e:  # a failed download, a corrupt file, onnxruntime refusing the model: all need the same fixes
+    except Exception as e:  # onnxruntime failing to import, a failed download, a corrupt file: all need the same fixes
         raise RuntimeError(
             f"the reranker model {RERANK_MODEL} could not load from {cache} ({type(e).__name__}: {e}); the first load "
             f"downloads it and needs network access, a corrupt cache is fixed by deleting {cache}, or set RERANK=off "

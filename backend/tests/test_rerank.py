@@ -58,5 +58,24 @@ def test_a_model_that_cannot_load_names_the_fixes(monkeypatch):
     assert "network" in message and "deleting" in message and "RERANK=off" in message
 
 
+@pytest.mark.parametrize(
+    "target, error",
+    [
+        ("fastembed.common.utils.define_cache_dir", PermissionError("cache directory is read-only")),
+        ("fastembed.rerank.cross_encoder.TextCrossEncoder", ImportError("DLL load failed while importing onnxruntime")),
+    ],
+)
+def test_any_load_failure_becomes_the_message_with_the_fixes(monkeypatch, target, error):
+    """The api, smoke and the evaluation catch RuntimeError: anything else would stop them with a bare traceback."""
+
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(target, fail)
+    with pytest.raises(RuntimeError, match="RERANK=off") as raised:
+        rerank.model()
+    assert str(error) in str(raised.value)
+
+
 def test_the_model_loads_once_per_process():
     assert rerank.model() is rerank.model()

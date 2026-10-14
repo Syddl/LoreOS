@@ -152,7 +152,8 @@ def test_npm_s_own_settings_do_not_stop_the_run(spy, monkeypatch, name):
 @pytest.mark.parametrize(
     "argv",
     [["--limit", "0"], ["--limit", "-1"], ["--limit", "two"], ["--mode", "bogus"], ["--bogus"], ["now"],
-     ["--chunk-tokens", "49"], ["--chunk-tokens", "many"], ["--chunk-overlap", "-1"]],
+     ["--chunk-tokens", "49"], ["--chunk-tokens", "many"], ["--chunk-overlap", "-1"],
+     ["--chunk-tokens", "8001"]],  # over the embedding model's input once the heading path is added: ingest would pay, then fail
 )
 def test_a_bad_argument_exits_2_before_the_preflight(spy, argv, capsys):
     assert cli(argv) == 2

@@ -269,7 +269,8 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
 ### Phase 3: measurement (main session, paid, each run asks)
 
 1. **Push and claim green on the phase 2 tip.** `claim-green --feature p3-hybrid-search`, then commit and push the ledger row.
-2. **Migrate Supabase.** Run `npm run db:migrate` and `npm run db:verify-rls`, then `select count(*) from loreos.chunks where tsv is null`. All three are free. Their output is kept in `scratch/`, and the ledger rows wait for step 5.
+2. **Migrate Supabase.** Run `npm run db:migrate` and `npm run db:verify-rls`, then `select count(*) from loreos.chunks where tsv is null`. All three are free.
+   - Then `explain` the keyword query as `loreos_app` with a workspace set, on a real `eval-*` workspace (step 7 review, nit). `@@` is not leakproof, so under RLS the planner may skip `chunks_tsv`. If it does, the plan goes in decision 0010 beside the latency. Their output is kept in `scratch/`, and the ledger rows wait for step 5.
 3. **Dry-run the sweep.** `npm run paid:eval -- --mode vector --chunk-tokens 250 --chunk-overlap 25 --dry-run` asks, and is free. It is repeated for 500/50 and 1000/100. Each plan is priced from the spec's Spend section before the paid runs are asked.
 4. **The sweep: three runs at one SHA**, run detached with their output in `docs/sdd/p3-hybrid-search/scratch/`. Each asks:
 

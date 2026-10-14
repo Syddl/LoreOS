@@ -1,4 +1,5 @@
 import asyncio
+import threading
 
 import pytest
 
@@ -111,3 +112,37 @@ def test_an_unknown_mode_is_refused_before_anything_is_bought(handbook, fake_emb
     with pytest.raises(ValueError, match="'bogus' is not one of vector, hybrid, hybrid_rerank"):
         find(DEFAULT_WORKSPACE_ID, QUESTION, k=2, mode="bogus")
     assert fake_embed == []
+
+
+@pytest.mark.parametrize("mode", ["hybrid", "hybrid_rerank"])
+def test_keyword_search_runs_before_the_embedding_is_bought(handbook, fake_embed, monkeypatch, mode):
+    """It is free and the first place the raw question reaches Postgres, so a failure there must come before the spend."""
+
+    async def refused(session, workspace_id, query, n):
+        raise RuntimeError("keyword search refused the question")
+
+    monkeypatch.setattr(retrieval, "keyword_search", refused)
+    with pytest.raises(RuntimeError, match="keyword search refused"):
+        find(DEFAULT_WORKSPACE_ID, QUESTION, k=2, mode=mode)
+    assert fake_embed == []
+
+
+def test_the_rerank_runs_off_the_event_loop_thread(handbook, fake_embed, monkeypatch):
+    """Seconds of CPU on the loop's thread would stall every other request the api is serving."""
+    threads = []
+
+    def record(query, hits):
+        threads.append(threading.get_ident())
+        return hits
+
+    monkeypatch.setattr(rerank, "rerank", record)
+    find(DEFAULT_WORKSPACE_ID, QUESTION, k=2, mode="hybrid_rerank")  # asyncio.run's loop runs on this thread
+    assert len(threads) == 1 and threads[0] != threading.get_ident()
+
+
+def test_an_exact_distance_tie_orders_by_chunk_id(clean, fake_embed):
+    """The vector order feeds RRF, so a tie must not depend on the scan order."""
+    store(DEFAULT_WORKSPACE_ID, "same.txt", ["Deploys happen on Tuesdays."] * 6)
+    hits = find(DEFAULT_WORKSPACE_ID, "When do deploys happen?", k=6, mode="vector")
+    assert len({h.score for h in hits}) == 1
+    assert [h.chunk_id for h in hits] == sorted(h.chunk_id for h in hits)
