@@ -1,6 +1,6 @@
 # Evaluation
 
-LoreOS scores its retrieval and its answers against questions a person wrote. This folder holds the inputs and the committed results.
+LoreOS scores its retrieval and its answers against a written evaluation set. This folder holds the inputs and the committed results. The README's results table is generated from `results/` by `npm run readme:table`.
 
 | Path | What | Written by |
 |---|---|---|
