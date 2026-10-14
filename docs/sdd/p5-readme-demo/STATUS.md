@@ -40,6 +40,7 @@ None. The live phase needs the operator twice: to create the "Demo" workspace an
 
 | date | branch | sha | suite | result | duration | not covered |
 |---|---|---|---|---|---|---|
+| 2026-10-14T14:45:00.607Z | p5-readme-demo | 6db4b7dc | `npm run check:all` | PASS | 348.1 s | the live demo load (paid) and the recording; check:compose (its own CI job); CI on Linux |
 
 ## Port ledger
 
