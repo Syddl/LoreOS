@@ -40,7 +40,7 @@ async def preflight(limit: int | None, modes: tuple[str, ...]) -> tuple[str, lis
         await smoke.preflight(reranker=False)  # the database, the migration head, and the key; the model goes by mode below
     except RuntimeError as e:  # settings raises a missing key or DATABASE_URL as RuntimeError, with its fix
         raise SystemExit(f"preflight: {e}") from e
-    notes = await _check_models()
+    notes = await check_models()
     if limit is None and not run.tree_clean():
         raise SystemExit("preflight: the git tree is not clean; commit or remove the changes, "
                          "since a committed result must name the code that produced it")
@@ -69,8 +69,11 @@ def _evaluation_set() -> tuple[list[dict], list[dict] | None]:
     return questions, calibration
 
 
-async def _check_models() -> list[str]:
-    """Each configured model is in the API's model list; a server without a model list leaves them unverified, noted."""
+async def check_models(models: dict[str, str] | None = None) -> list[str]:
+    """Each model, by its env key, is in the API's model list; a server without a model list leaves them unverified,
+    noted. By default the three the evaluation uses; paid:demo-load checks the embedding model alone."""
+    if models is None:
+        models = {"EMBEDDING_MODEL": settings.embedding_model(), "ANSWER_MODEL": settings.answer_model(), "JUDGE_MODEL": settings.judge_model()}
     try:
         async with llm.client() as client:
             listed = {model.id for model in (await client.models.list()).data}
@@ -79,7 +82,6 @@ async def _check_models() -> list[str]:
         return [f"models: listing models returned {e.status_code}; the model names are unverified"]
     except openai.OpenAIError as e:
         raise SystemExit(f"preflight: cannot list the models ({type(e).__name__}: {e}); check the network and OPENAI_BASE_URL") from e
-    models = {"EMBEDDING_MODEL": settings.embedding_model(), "ANSWER_MODEL": settings.answer_model(), "JUDGE_MODEL": settings.judge_model()}
     if missing := [f"{env}={model}" for env, model in models.items() if model not in listed]:
         raise SystemExit(f"preflight: the API lists no model {', '.join(missing)}; set each in .env to a model your key can use")
     return []

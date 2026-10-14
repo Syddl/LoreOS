@@ -647,6 +647,8 @@ ENV_READS_ALLOWED = {
     ("evaluation/__main__.py", "for key in os.environ:"): "the npm_config_* loop: names a paid:eval flag npm took",
     ("evaluation/__main__.py", "npm_config_dry_run"): "npm's --dry-run on paid:eval, which narrows it to the preflight",
     ("evaluation/calibration.py", "INIT_CWD"): "where npm ran, to resolve the calibration draft's relative path",
+    ("demo.py", "for key in os.environ:"): "the npm_config_* loop: names the --workspace-id npm took from paid:demo-load",
+    ("demo.py", "npm_config_dry_run"): "npm's --dry-run on paid:demo-load, which narrows it to the preflight",
 }
 
 
