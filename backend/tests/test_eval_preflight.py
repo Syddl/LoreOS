@@ -13,7 +13,7 @@ import httpx2  # the SDK's own HTTP module, to build the request its errors carr
 import openai
 import pytest
 
-from loreos import chunking, llm, settings, smoke
+from loreos import chunking, llm, rerank, settings, smoke
 from loreos.evaluation import dataset, preflight, run
 from pdf import make_pdf
 
@@ -104,8 +104,9 @@ def pf(tmp_path, monkeypatch):
         models_error=None, smoke_error=None, clean=True, calls=[], paid=[],
     )
 
-    async def smoke_preflight():
+    async def smoke_preflight(reranker=True):
         state.calls.append("smoke")
+        state.smoke_reranker = reranker
         if state.smoke_error:
             raise state.smoke_error
 
@@ -123,7 +124,7 @@ def pf(tmp_path, monkeypatch):
     assert state.paid == []
 
 
-def check(state, limit=None) -> tuple[str, list[str]]:
+def check(state, limit=None, modes=("vector",)) -> tuple[str, list[str]]:
     """Write the state's files (a None list writes nothing), then run the preflight."""
     for file, data in state.files.items():
         path = dataset.CORPUS_DIR / file
@@ -134,7 +135,7 @@ def check(state, limit=None) -> tuple[str, list[str]]:
         write_jsonl(dataset.QUESTIONS, state.questions)
     if state.calibration is not None:
         write_jsonl(dataset.CALIBRATION, state.calibration)
-    return asyncio.run(preflight.preflight(limit))
+    return asyncio.run(preflight.preflight(limit, modes))
 
 
 def refused(state, limit=None) -> str:
@@ -287,3 +288,38 @@ def test_the_corpus_token_count_is_what_ingest_sends_to_the_embedder(pf, clean, 
     assert int(found[1]) == sum(chunking.count_tokens(text) for text in fake_embed)
     check(pf)
     assert f"workspace {name} reused; corpus embedding 0 tokens in 0 embed calls" in capsys.readouterr().out
+
+
+def test_a_reranker_that_cannot_load_stops_a_rerank_preflight_before_the_plan(pf, clean, monkeypatch, capsys):
+    def fail():
+        raise RuntimeError("the reranker model could not load (faked); or set RERANK=off")
+
+    monkeypatch.setattr(rerank, "model", fail)
+    with pytest.raises(SystemExit, match=r"^preflight: .*RERANK=off"):
+        check(pf, modes=run.MODES)
+    assert "plan: " not in capsys.readouterr().out
+
+
+def test_a_preflight_without_the_rerank_mode_never_loads_the_model(pf, clean, monkeypatch):
+    monkeypatch.setattr(rerank, "model", lambda: pytest.fail("loaded the reranker for vector and hybrid"))
+    assert check(pf, modes=("vector", "hybrid"))[0] == SHA
+
+
+def test_the_plan_for_every_mode_counts_each_mode_s_calls_and_the_corpus_once(pf, clean, monkeypatch, capsys):
+    monkeypatch.setattr(llm, "EMBED_BATCH", 3)
+    monkeypatch.setattr(rerank, "model", lambda: None)
+    check(pf, modes=run.MODES)
+    per_call = 5 * chunking.CHUNK_TOKENS + preflight.CALL_ALLOWANCE
+    plan = [line for line in capsys.readouterr().out.splitlines() if line.startswith("plan: ")]
+    assert plan[1] == "plan: modes vector, hybrid, hybrid_rerank: one run each, from this commit"
+    assert plan[3:] == [
+        "plan: embed calls 42 (3 for the corpus, one per question, per mode, 3 modes)",
+        "plan: answer calls up to 39; judge calls up to 129 (13 answers, 30 calibration rows, per mode, 3 modes)",
+        f"plan: input tokens up to about {per_call} per answer or judge call (5 passages of up to {chunking.CHUNK_TOKENS} tokens, "
+        f"plus {preflight.CALL_ALLOWANCE}), {per_call * 56 * 3} in all; output tokens are not capped",
+    ]
+
+
+def test_the_smoke_preflight_leaves_the_reranker_to_the_modes(pf, clean):
+    check(pf, modes=("vector",))
+    assert pf.smoke_reranker is False

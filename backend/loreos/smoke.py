@@ -1,7 +1,8 @@
 """The real slice end to end: npm run paid:smoke (python -m loreos.smoke). Costs a few cents.
 
 Preflight before any paid call: DATABASE_URL connects, the schema is at the migration head, the
-db:verify-rls assertions hold, and OPENAI_API_KEY is set and accepted (listing models is free).
+db:verify-rls assertions hold, OPENAI_API_KEY is set and accepted (listing models is free), and the reranker
+model loads when the api would answer with it.
 Then, in a throwaway workspace: one Markdown upload, one answerable and one unanswerable question,
 printed with their citations. The
 workspace is deleted at the end, pass or fail. Exit 0 only when the answerable question is cited
@@ -19,7 +20,7 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
-from loreos import answering, ingest, llm, settings, verify_rls
+from loreos import answering, ingest, llm, rerank, retrieval, settings, verify_rls
 from loreos.db import engine, workspace_session
 
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
@@ -38,8 +39,14 @@ incident ticket.
 QUESTIONS = [("When do production deploys happen?", True), ("What is the office Wi-Fi password?", False)]
 
 
-async def preflight() -> None:
+async def preflight(reranker: bool = True) -> None:
+    """reranker=False leaves the model to a caller that loads it itself: the evaluation, by the modes it runs."""
     settings.openai_api_key()  # raises with the fix when unset
+    if reranker and retrieval.serving_mode() == "hybrid_rerank":  # loaded now, free, rather than after ingest has paid
+        try:
+            rerank.model()
+        except RuntimeError as e:
+            raise SystemExit(f"preflight: {e}") from e
     head = ScriptDirectory.from_config(Config(str(ALEMBIC_INI))).get_current_head()
     try:
         async with engine().connect() as conn:

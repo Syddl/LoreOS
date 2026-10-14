@@ -45,6 +45,7 @@ PINNED_ENV = {
     "ANSWER_MODEL": settings.DEFAULT_ANSWER_MODEL,
     "JUDGE_MODEL": settings.DEFAULT_JUDGE_MODEL,
     "ALLOWED_HOSTS": settings.DEFAULT_ALLOWED_HOSTS,
+    "RERANK": settings.DEFAULT_RERANK,
 }
 os.environ.update(PINNED_ENV)
 

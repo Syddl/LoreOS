@@ -13,17 +13,23 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never \
     UV_PROJECT_ENVIRONMENT=/app/backend/.venv \
     TIKTOKEN_CACHE_DIR=/app/tiktoken \
+    FASTEMBED_CACHE_PATH=/app/fastembed \
     PATH=/app/backend/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1
 WORKDIR /app/backend
+RUN useradd --create-home --uid 10001 loreos
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --locked --no-dev
+# The reranker model (decision 0010), fetched at build so a container never downloads it: the api loads it at startup,
+# since the default mode reranks. Before the rest of the source, so only a change to rerank.py fetches it again, and
+# chowned in the same layer, so the image holds it once.
+COPY backend/loreos/__init__.py backend/loreos/rerank.py ./loreos/
+RUN python -c "from loreos import rerank; rerank.model()" && chown -R loreos:loreos /app/fastembed
 COPY backend/ ./
 # main.DIST is the repo root's frontend/dist, two directories above loreos/main.py.
 COPY --from=frontend /app/frontend/dist /app/frontend/dist
 # The chunker's encoding, fetched now so a container never downloads it at runtime.
 RUN python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
-RUN useradd --create-home --uid 10001 loreos
 USER loreos
 EXPOSE 8000
 CMD ["python", "-m", "uvicorn", "loreos.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

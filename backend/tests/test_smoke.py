@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from loreos import llm, smoke, verify_rls
+from loreos import llm, rerank, retrieval, smoke, verify_rls
 
 
 @pytest.fixture
@@ -85,4 +85,34 @@ def test_preflight_stops_on_a_missing_grant_before_calling_openai(db, listed, mo
 
 def test_preflight_with_the_grants_in_place_reaches_openai(db, listed):
     asyncio.run(smoke.preflight())
+    assert listed == ["models"]
+
+
+def test_preflight_stops_on_a_reranker_that_cannot_load_before_anything_is_paid(db, listed, monkeypatch):
+    """With hybrid_rerank serving, ingest would pay for the embedding before answering loads the model."""
+
+    def fail():
+        raise RuntimeError("the reranker model could not load (faked); or set RERANK=off")
+
+    monkeypatch.setattr(retrieval, "DEFAULT_MODE", "hybrid_rerank")
+    monkeypatch.setattr(rerank, "model", fail)
+    with pytest.raises(SystemExit, match=r"^preflight: .*RERANK=off"):
+        asyncio.run(smoke.preflight())
+    assert listed == []
+
+
+@pytest.mark.parametrize("default, switch", [("vector", "on"), ("hybrid", "on"), ("hybrid_rerank", "off")])
+def test_preflight_never_loads_the_reranker_when_the_api_would_not_use_it(db, listed, monkeypatch, default, switch):
+    monkeypatch.setattr(retrieval, "DEFAULT_MODE", default)
+    monkeypatch.setenv("RERANK", switch)
+    monkeypatch.setattr(rerank, "model", lambda: pytest.fail(f"loaded the reranker for {retrieval.serving_mode()} serving"))
+    asyncio.run(smoke.preflight())
+    assert listed == ["models"]
+
+
+def test_a_caller_that_loads_the_reranker_itself_can_skip_it_here(db, listed, monkeypatch):
+    """The evaluation's preflight loads it by mode, so a --mode vector run must not need it through smoke's."""
+    monkeypatch.setattr(retrieval, "DEFAULT_MODE", "hybrid_rerank")
+    monkeypatch.setattr(rerank, "model", lambda: pytest.fail("loaded the reranker for a caller that skips it"))
+    asyncio.run(smoke.preflight(reranker=False))
     assert listed == ["models"]

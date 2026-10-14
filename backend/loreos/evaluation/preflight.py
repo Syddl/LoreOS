@@ -9,15 +9,15 @@ from typing import NoReturn
 
 import openai
 
-from loreos import answering, chunking, ingest, llm, parsing, settings, smoke
+from loreos import answering, chunking, ingest, llm, parsing, rerank, settings, smoke
 from loreos.evaluation import dataset, fetch, labels, run
 
 CALL_ALLOWANCE = 1000  # tokens per answer or judge call beside the passages: instructions, question, source labels, answer
 
 
-async def preflight(limit: int | None) -> tuple[str, list[str]]:
-    """Run the checks and print the planned calls and tokens. Return the commit the run must still be at when it writes,
-    and the notes the result file must carry: each fallback taken and each warning printed here."""
+async def preflight(limit: int | None, modes: tuple[str, ...]) -> tuple[str, list[str]]:
+    """Run the checks and print the planned calls and tokens for one run per mode. Return the commit the runs must still
+    be at when they write, and the notes the result files must carry: each fallback taken and each warning printed here."""
     questions, calibration = _evaluation_set()
     manifest = _read(dataset.read_manifest, dataset.MANIFEST)
     if problems := dataset.manifest_problems(manifest):
@@ -37,14 +37,19 @@ async def preflight(limit: int | None) -> tuple[str, list[str]]:
     if problems := labels.label_problems(questions, entries):
         _refuse("labels that match no section of the corpus", problems)
     try:
-        await smoke.preflight()  # the database, the migration head, and the key
+        await smoke.preflight(reranker=False)  # the database, the migration head, and the key; the model goes by mode below
     except RuntimeError as e:  # settings raises a missing key or DATABASE_URL as RuntimeError, with its fix
         raise SystemExit(f"preflight: {e}") from e
     notes = await _check_models()
     if limit is None and not run.tree_clean():
         raise SystemExit("preflight: the git tree is not clean; commit or remove the changes, "
                          "since a committed result must name the code that produced it")
-    await _print_plan(questions[:limit], len(questions), calibration if limit is None else None, manifest, corpus)
+    if "hybrid_rerank" in modes:  # free, and a missing network fails here rather than after a paid run has started
+        try:
+            rerank.model()
+        except RuntimeError as e:
+            raise SystemExit(f"preflight: {e}") from e
+    await _print_plan(questions[:limit], len(questions), calibration if limit is None else None, manifest, corpus, modes)
     for warning in labels.broad_labels(questions, entries):
         print(f"warning: {warning}")
         notes.append(f"broad label: {warning}")
@@ -80,8 +85,10 @@ async def _check_models() -> list[str]:
     return []
 
 
-async def _print_plan(asked: list[dict], total: int, calibration: list[dict] | None, manifest: dict, corpus: dict[str, bytes]) -> None:
-    """The calls and tokens the run will spend: corpus embedding exactly, answers and judging as an upper estimate."""
+async def _print_plan(asked: list[dict], total: int, calibration: list[dict] | None, manifest: dict, corpus: dict[str, bytes],
+                      modes: tuple[str, ...]) -> None:
+    """The calls and tokens the runs will spend: corpus embedding exactly (once, since every mode reads the same
+    workspace), and per mode the question embeddings, answers and judging (calibration included) as an upper estimate."""
     answerable = sum(q["answerable"] for q in asked)
     name = run.workspace_name(manifest)
     _, reused = await run.workspace_status(name, corpus)
@@ -93,13 +100,18 @@ async def _print_plan(asked: list[dict], total: int, calibration: list[dict] | N
             calls += -(-len(chunks) // llm.EMBED_BATCH)
     rows = len(calibration) if calibration is not None else 0
     judged = len(asked) + rows
+    runs = len(modes)
+    per_mode = f", per mode, {runs} modes" if runs > 1 else ""
     per_call = answering.TOP_K * chunking.CHUNK_TOKENS + CALL_ALLOWANCE
     print(f"plan: {len(asked)} of {total} questions ({answerable} answerable, {len(asked) - answerable} unanswerable)")
+    if runs > 1:
+        print(f"plan: modes {', '.join(modes)}: one run each, from this commit")
     print(f"plan: workspace {name} {'reused' if reused else 'to build'}; corpus embedding {tokens} tokens in {calls} embed calls")
-    print(f"plan: embed calls {calls + len(asked)} ({calls} for the corpus, one per question)")
-    print(f"plan: answer calls up to {len(asked)}; judge calls up to {judged} ({len(asked)} answers, {rows} calibration rows)")
+    print(f"plan: embed calls {calls + len(asked) * runs} ({calls} for the corpus, one per question{per_mode})")
+    print(f"plan: answer calls up to {len(asked) * runs}; judge calls up to {judged * runs} "
+          f"({len(asked)} answers, {rows} calibration rows{per_mode})")
     print(f"plan: input tokens up to about {per_call} per answer or judge call ({answering.TOP_K} passages of up to "
-          f"{chunking.CHUNK_TOKENS} tokens, plus {CALL_ALLOWANCE}), {per_call * (len(asked) + judged)} in all; "
+          f"{chunking.CHUNK_TOKENS} tokens, plus {CALL_ALLOWANCE}), {per_call * (len(asked) + judged) * runs} in all; "
           "output tokens are not capped")
 
 

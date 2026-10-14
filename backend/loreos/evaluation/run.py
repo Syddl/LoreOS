@@ -21,13 +21,13 @@ from urllib.parse import urlsplit
 import openai
 from sqlalchemy import text
 
-from loreos import answering, chunking, ingest, llm, parsing, retrieval, settings
+from loreos import answering, chunking, fusion, ingest, llm, parsing, rerank, retrieval, settings
 from loreos.db import RETRIES, engine, workspace_session
 from loreos.evaluation import dataset, labels, metrics
 
 SCHEMA = 1
 SEARCH_K = 10
-MODES = ("vector",)  # P3 adds the others
+MODES = retrieval.MODES
 KEYED_SOURCES = (parsing, chunking, ingest)  # the code that shapes stored chunks and their embedding input
 # The embedding request and the stored vector text, captured at import so a test's fake never changes the key.
 KEYED_FUNCTIONS = (llm.embed, retrieval.vector_literal)
@@ -76,8 +76,27 @@ def git_sha() -> str:
 
 
 def tree_clean() -> bool:
-    """No tracked change and no untracked file; ignored files do not count."""
-    return _git("status", "--porcelain", "--untracked-files=normal") == ""  # whatever status.showUntrackedFiles says
+    """No tracked change and no untracked file but a result: an untracked *.json directly in RESULTS_DIR does not count.
+
+    A result is not code, and --mode all, or a chunk sweep at one commit, writes several before any is committed;
+    each still records the commit it ran at. Ignored files do not count either.
+    """
+    exempt = _results_prefix()
+    # every untracked file listed, whatever status.showUntrackedFiles says; porcelain paths are from the repo root
+    for line in _git("status", "--porcelain", "--untracked-files=all").splitlines():
+        path = line[3:]
+        if exempt and line.startswith("?? ") and path.startswith(exempt) and path.endswith(".json") and "/" not in path[len(exempt):]:
+            continue
+        return False
+    return True
+
+
+def _results_prefix() -> str | None:
+    """RESULTS_DIR as git prints it under ROOT ('eval/results/'); None, so nothing is exempt, when it lies outside."""
+    try:
+        return dataset.RESULTS_DIR.relative_to(dataset.ROOT).as_posix() + "/"
+    except ValueError:
+        return None
 
 
 def _git(*args: str) -> str:
@@ -132,6 +151,10 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str, preflight_n
                 "chunk_overlap": chunking.CHUNK_OVERLAP,
                 "k": answering.TOP_K,
                 "search_k": SEARCH_K,
+                "rrf_k": fusion.RRF_K,
+                "fuse_depth": retrieval.FUSE_DEPTH,
+                "rerank_depth": retrieval.RERANK_DEPTH,
+                "rerank_model": rerank.RERANK_MODEL,
                 # The host alone (never the URL, which may carry credentials): it tells an OpenAI run from another server's.
                 "openai_base_url_host": urlsplit(base).hostname if (base := settings.openai_base_url()) else None,
             },
@@ -161,7 +184,7 @@ async def evaluate(mode: str, limit: int | None, preflight_sha: str, preflight_n
         # ponytail: one question at a time keeps the search timings clean, and 100 questions take minutes;
         # run them concurrently if the set grows to thousands.
         for i, question in enumerate(questions, 1):
-            row, row_notes = await _ask(workspace_id, question)
+            row, row_notes = await _ask(workspace_id, question, mode)
             rows.append(row)  # only a complete row, so a partial result's numbers match its rows
             notes.extend(row_notes)
             outcome = (row["judge"]["grade"] or "no verdict") if row["judge"] else f"refused ({row['answer']['reason']})"
@@ -207,24 +230,25 @@ async def _ingest(name: str, corpus: dict[str, bytes]) -> tuple[uuid.UUID, bool]
     return workspace_id, reused
 
 
-async def _ask(workspace_id: uuid.UUID, question: dict) -> tuple[dict, list[str]]:
-    """One question as POST /api/ask answers it (search, then the first TOP_K hits), then judged; the row and its notes."""
+async def _ask(workspace_id: uuid.UUID, question: dict, mode: str) -> tuple[dict, list[str]]:
+    """One question as POST /api/ask answers it (search, then the first TOP_K hits), then judged; the row and its notes.
+    search_ms times the whole search in this mode: the question's embedding, the queries and any rerank."""
     qid, asked = question["id"], question["question"]
     notes = []
     async with workspace_session(workspace_id) as session:
         start = time.perf_counter()
-        hits = await retrieval.search(session, workspace_id, asked, SEARCH_K)
+        hits = await retrieval.search(session, workspace_id, asked, SEARCH_K, mode)
         search_ms = round((time.perf_counter() - start) * 1000, 1)
     error = None
     try:
-        answer = await answering.answer_from_hits(asked, hits[: answering.TOP_K])
+        answer = await answering.answer_from_hits(asked, hits[: answering.TOP_K], mode)
     except openai.APIError:
         raise  # the model or the key is broken, so every later answer would fail too
     except Exception as e:  # no parsed answer, or a length or content-filter stop: the user would get no answer either
         if isinstance(e.__cause__, openai.APIError):
             raise  # draft_answer wraps a rejected request (BadRequestError) for its message; it is still an API failure
         error = f"{type(e).__name__}: {e}"
-        answer = answering.Answer(False, answering.REFUSAL, [], "answer_error")
+        answer = answering.Answer(False, answering.REFUSAL, [], "answer_error", mode)
         notes.append(f"{qid}: the answer failed ({error}); recorded as refused with reason answer_error")
     judge = None
     if answer.found:

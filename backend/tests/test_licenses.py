@@ -1,6 +1,7 @@
 """The license rule in check_licenses.problems(), and the npm tree reader behind check:licenses.
 
-Proves: decision 0007's rule (MPL-2.0 passes, GPL, LGPL and AGPL fail, no license fails); that npm_packages()
+Proves: decision 0007's rule (MPL-2.0 passes, GPL, LGPL and AGPL fail, no license fails); that a backend package
+whose metadata names no license is judged by the text of the license files it ships; that npm_packages()
 lists each package once per name and version, with its license in every shape npm writes; and that
 `check_licenses.py --npm-tree -` reads a non-ASCII tree from a real pipe in an interpreter without UTF-8 mode,
 the Windows default, and still fails a GPL license written in curly quotes.
@@ -15,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from check_licenses import npm_packages, problems
+from check_licenses import declared, npm_packages, problems
 
 BACKEND = Path(__file__).resolve().parent.parent
 
@@ -47,6 +48,39 @@ def test_certifi_under_another_copyleft_still_fails():
 
 def test_no_declared_license_fails():
     assert problems([("mystery", "")]) == ["mystery: declares no license"]
+
+
+class Dist:
+    """An installed distribution as importlib.metadata shows it: metadata fields, and files read by relative path."""
+
+    def __init__(self, fields: dict[str, list[str]], files: dict[str, str]):
+        self.fields, self.files = fields, files
+        self.metadata = self
+
+    def get(self, key):
+        return (self.fields.get(key) or [None])[0]
+
+    def get_all(self, key):
+        return self.fields.get(key)
+
+    def read_text(self, name):
+        return self.files.get(name)
+
+
+def test_a_package_with_no_license_field_is_judged_by_the_license_file_it_ships():
+    # py-rust-stemmers 0.1.8 (fastembed) ships licenses/LICENSE (MIT) and fills no license field.
+    mit = Dist({"License-File": ["LICENSE"]}, {"licenses/LICENSE": "MIT License\n\nCopyright (c) 2024 qdrant\n"})
+    gpl = Dist({"License-File": ["COPYING"]}, {"COPYING": "GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n"})
+    nothing = Dist({"License-File": ["LICENSE"]}, {})
+    # setuptools' default license_files globs take AUTHORS and NOTICE too: a file that names no license is no license.
+    authors = Dist({"License-File": ["AUTHORS"]}, {"licenses/AUTHORS": "Alice <alice@example.com>\n"})
+    found = problems([("mit", declared(mit)), ("gpl", declared(gpl)), ("nothing", declared(nothing)), ("authors", declared(authors))])
+    assert found == ["gpl: GNU GENERAL PUBLIC LICENSE", "nothing: declares no license", "authors: declares no license"]
+
+
+def test_a_declared_license_wins_over_the_license_file():
+    dist = Dist({"License": ["Apache-2.0"], "License-File": ["LICENSE"]}, {"licenses/LICENSE": "GNU General Public License"})
+    assert declared(dist) == "Apache-2.0"
 
 
 # The shape of `npm ls --all --json --long`. npm writes a repeated package in full at one place and as a stub

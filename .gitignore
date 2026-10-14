@@ -14,6 +14,9 @@ dist/
 # Scratch output
 docs/sdd/*/scratch/
 
+# The reranker model cache when FASTEMBED_CACHE_PATH points into the checkout, as CI's does.
+.fastembed-cache/
+
 # Evaluation corpus: fetched by npm run eval:fetch, never committed, so the corpus licenses stay out of the repo.
 eval/corpus/
 

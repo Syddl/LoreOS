@@ -10,6 +10,7 @@ dependencies = [
     "asyncpg",
     "beautifulsoup4>=4.15.0",
     "fastapi",
+    "fastembed==0.9.0",
     "httpcore2>=2.13.1",
     "httpx2>=2.13.1",
     "openai",

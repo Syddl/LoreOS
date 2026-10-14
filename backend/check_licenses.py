@@ -18,15 +18,28 @@ COPYLEFT = re.compile(
     r"|EPL|Eclipse Public|CDDL|OSL|Open Software License|CECILL|CC-BY-SA|ShareAlike|copyleft)\b",
     re.I,
 )
+# The opening words of the permissive license texts a package may ship without declaring its license.
+PERMISSIVE_TEXT = re.compile(
+    r"\b(?:MIT License|Permission is hereby granted|Apache License|BSD \d-Clause|Redistribution and use in source and binary"
+    r"|ISC License|Permission to use, copy, modify|Zlib License|This is free and unencumbered software)\b",
+    re.I,
+)
 
 
 def declared(dist) -> str:
-    """License-Expression when present, else the License field and the license classifiers."""
+    """License-Expression when present, else the License field and the license classifiers, else the text of the
+    license files the package ships (License-File), whole, so a copyleft name anywhere in them fails."""
     meta = dist.metadata
     if expression := meta.get("License-Expression"):
         return expression
     classifiers = [c.split(" :: ")[-1] for c in meta.get_all("Classifier") or [] if c.startswith("License ::")]
-    return " | ".join(part for part in [meta.get("License") or "", *classifiers] if part.strip())
+    if found := " | ".join(part for part in [meta.get("License") or "", *classifiers] if part.strip()):
+        return found
+    # Metadata 2.4 keeps them under licenses/ in .dist-info; older wheels at its top.
+    texts = [dist.read_text(f"licenses/{name}") or dist.read_text(name) or "" for name in meta.get_all("License-File") or []]
+    text = "\n".join(text.strip() for text in texts if text.strip())
+    # License-File also takes AUTHORS and NOTICE: text that names no license is no license, and a copyleft name still fails.
+    return text if PERMISSIVE_TEXT.search(text) or COPYLEFT.search(text) else ""
 
 
 def npm_license(pkg: dict) -> str:
