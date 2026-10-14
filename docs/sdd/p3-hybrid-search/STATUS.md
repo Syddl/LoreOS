@@ -100,15 +100,34 @@ The single carrier of state between sessions. Update it before a session ends; t
     - **Hybrid against vector:** hybrid ranks the first relevant chunk lower than vector on 20 answerable questions, and higher on 7 (`scratch/vector-vs-hybrid.txt`). The usual cause is a sibling section of the same document, whose heading path shares the question's words. Keyword search ranks it high, and equal-weight RRF lifts it over vector's first hit.
     - **Shortcodes:** 88 of 920 chunks hold a Hugo shortcode. Shortcode chunks fill about the same share of the top 5 in each mode: 36, 42 and 34 of 405 top-5 hits, of which 29, 37 and 27 are not relevant (`scratch/shortcodes.txt`). The KNOWN-GAPS trigger is met only marginally, by 8 extra hits in hybrid, so the row stays as it is.
     - **The reranked mode against vector:** it is better on 12 questions and worse on 11 (`scratch/vector-vs-rerank.txt`). It finds q053 (rank 3) and q061 (rank 1), which vector never retrieved.
-  - **For P5** (step 10): the README states that the chunk size was measured in `vector` mode, citing decision 0009.
+  - **Step 7 done**, at `7b278eb`. [Decision 0010](../../decisions/0010-reranker-and-default-mode.md) sets `DEFAULT_MODE = "hybrid_rerank"`: by behaviour 9, it beats `vector` on Recall@5 (0.924 against 0.909) and on MRR@10 (0.855 against 0.825), for about 2.3 s more search time at p50.
+    - **A spec change, for the operator to veto: `RERANK=off` now serves `vector`, not `hybrid`.** `hybrid` measured worse than `vector` on both metrics, so the switch as specced would leave answers worse than before P3. Red first: the switch test expected `vector`, failed, then passed; redproof PASS.
+    - **The image** bakes the model under `FASTEMBED_CACHE_PATH=/app/fastembed`, and grows from 93 MB to 324 MB.
+      - **The compose check** starts the api with `HF_HUB_OFFLINE=1`, and `check-compose.mjs` asserts it.
+      - **Run locally**, `npm run check:compose` passes.
+      - **The redproof:** an image with an empty cache directory builds, but the api fails at startup. PASS.
+      - **A first redproof was red for the wrong reason** (the build failed at `chown`), so it was redone with a mutation that keeps the build valid.
+    - **One test assumed vector serving**: `test_preflight_never_loads_the_reranker_when_the_api_would_not_use_it`. It now sets the default and the switch itself, across three cases. Every other test passes with real `hybrid_rerank` serving.
+    - **KNOWN-GAPS gains three rows:**
+      - the reranker's CPU per question, with no concurrency cap;
+      - the GIN index under RLS, unproven at scale;
+      - heading words in keyword ranking.
+  - **Step 9 (database size):** 93 MB, up from 32 MB. There are four `eval-*` workspaces. Only `eval-093199cc80a6` (500/50) is in use. Three are no longer read, and pruning them waits for the operator's yes, because it deletes data:
+    - `eval-f642a16b4e50` (P2's, 920 chunks);
+    - `eval-f09e96cf6f39` (250/25, 1239 chunks);
+    - `eval-2f5e71f82f9c` (1000/100, 796 chunks).
+  - **For P5** (step 10), the README:
+    - states that the chunk size was measured in `vector` mode, citing decision 0009;
+    - takes the three-row comparison from the `c221b3a` files, as decision 0010 lists them;
+    - says that judge agreement is with Claude's grades (decision 0008).
 
 ## Next step
 
-Phase 3 step 7: decision 0010 (`DEFAULT_MODE = hybrid_rerank` by behaviour 9), the image bake, `HF_HUB_OFFLINE` in the compose check, and `check:all` after the switch.
+Phase 4: the whole-branch review by an independent reviewer (step 9), then the fix wave, the PR and CI. Merge only on the operator's yes.
 
 ## Blockers
 
-None. Every paid run in P3 is done.
+None. Every paid run in P3 is done. The operator decides on the vector fallback (decision 0010) and on pruning the three unused `eval-*` workspaces.
 
 ## Verification ledger
 
@@ -124,6 +143,8 @@ None. Every paid run in P3 is done.
 | 2026-10-14 (by hand, live) | p3-hybrid-search | c221b3a | `npm run paid:eval -- --mode all --dry-run`, approved at the ask; `scratch/dry-all.log` | PASS | | The workspace was reused (0 corpus tokens). 243 answer and 333 judge calls, with an upper bound of about $0.85. No paid call |
 | 2026-10-14 (by hand, live) | p3-hybrid-search | c221b3a | `compare-all` (`--mode all`), approved at the ask; `scratch/compare-all.log` | PARTIAL: 2 of 3 modes to `eval/results/`; FAIL (environment) on the third | | `20261014T103002Z-vector-c221b3a3.json`: Recall@5 0.909, MRR@10 0.825, $0.1251. `20261014T104308Z-hybrid-c221b3a3.json`: Recall@5 0.864, MRR@10 0.682, $0.1545. `hybrid_rerank` died at question 51 of 81 in an unclean host shutdown (Kernel-Power 41), with no partial file, about $0.09 lost |
 | 2026-10-14 (by hand, live) | p3-hybrid-search | c221b3a | `compare-rerank-retry` (`--mode hybrid_rerank`), approved at the ask; `scratch/compare-rerank-retry.log` | PASS (to `eval/results/`) | | `20261014T123854Z-hybrid_rerank-c221b3a3.json`: Recall@5 0.924, MRR@10 0.855, faithfulness 0.968, search p50 3655 ms. Cost $0.1383. Not covered: latency on a deploy host; concurrent questions |
+| 2026-10-14 (by hand) | p3-hybrid-search | 7b278eb | `npm run check:compose` locally (its own CI job), after a retry: the first build hit a Docker Hub TLS timeout; `scratch/check-compose.log` | PASS | | The api is healthy with `HF_HUB_OFFLINE=1`, and the image is 324 MB. Redproof (an empty `/app/fastembed`, so no model) PASS: the api fails at startup. Not covered: CI's run of the same job |
+| 2026-10-14T13:03:31.008Z | p3-hybrid-search | 7b278eb6 | `npm run check:all` | PASS | 345.3 s | check:compose (its own CI job; run locally and redproved by hand); real OpenAI and Supabase (the paid runs are ledger rows); CI on Linux |
 
 ## Port ledger
 
