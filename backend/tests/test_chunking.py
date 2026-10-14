@@ -50,3 +50,14 @@ def test_chunks_never_span_sections_and_ordinals_run_in_order():
     first_of_page = next(c for c in chunks if c.page == 2)
     assert first_of_page.text.startswith("Runbook step 0.0 ")
     assert all(c.token_count <= 120 for c in chunks)
+
+
+def test_the_budget_is_read_when_chunk_is_called(monkeypatch):
+    """ingest calls chunk() bare, so the evaluation's chunk flags reach it only through the module values."""
+    from loreos import chunking
+
+    at_default = chunk([Section(["Runbook"], None, LONG)])
+    monkeypatch.setattr(chunking, "CHUNK_TOKENS", 120)
+    monkeypatch.setattr(chunking, "CHUNK_OVERLAP", 20)
+    assert chunk([Section(["Runbook"], None, LONG)]) == chunk([Section(["Runbook"], None, LONG)], max_tokens=120, overlap_tokens=20)
+    assert len(chunk([Section(["Runbook"], None, LONG)])) > len(at_default)

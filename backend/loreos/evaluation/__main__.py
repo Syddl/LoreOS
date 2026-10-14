@@ -1,4 +1,5 @@
-"""`npm run paid:eval -- [--mode vector] [--limit n] [--dry-run]`: the free preflight, then the paid run.
+"""`npm run paid:eval -- [--mode M|all] [--chunk-tokens N] [--chunk-overlap N] [--limit n] [--dry-run]`: the free
+preflight, then the paid run, once per mode.
 
 The guard asks before every form, the dry run included. Only `run.evaluate` spends, and it runs only after the
 preflight has passed, with the commit the preflight recorded.
@@ -10,6 +11,7 @@ import json
 import os
 import sys
 
+from loreos import chunking, settings
 from loreos.evaluation import preflight, run
 
 # npm reads a flag given before `--` as its own config, sets npm_config_<name> and drops it from the script's
@@ -17,7 +19,14 @@ from loreos.evaluation import preflight, run
 # abbreviation argparse would accept (--lim) counts too. ponytail: a misspelling (--limt) is still swallowed silently,
 # and npm expands --l and --m into its own --long and --message: `--l N` exits 2 on the stray N, `--m X` runs the
 # default mode. Refusing npm_config_message would refuse a user's .npmrc, so both stay.
-NPM_SWALLOWED = {"limit": "npm run paid:eval -- --limit N", "mode": "npm run paid:eval -- --mode vector"}
+CHUNK_FORM = "npm run paid:eval -- --chunk-tokens N --chunk-overlap N"
+NPM_SWALLOWED = {
+    "limit": "npm run paid:eval -- --limit N",
+    "mode": "npm run paid:eval -- --mode vector",
+    "chunk-tokens": CHUNK_FORM,
+    "chunk-overlap": CHUNK_FORM,
+}
+MIN_CHUNK_TOKENS = 50
 
 
 def _swallowed() -> str | None:
@@ -30,14 +39,20 @@ def _swallowed() -> str | None:
     return None
 
 
-def _limit(text: str) -> int:
-    try:
-        limit = int(text)
-    except ValueError:
-        limit = 0
-    if limit < 1:
-        raise argparse.ArgumentTypeError(f"{text!r} is not an integer of at least 1")
-    return limit
+def _at_least(lowest: int):
+    def parse(text: str) -> int:
+        try:
+            value = int(text)
+        except ValueError:
+            value = lowest - 1
+        if value < lowest:
+            raise argparse.ArgumentTypeError(f"{text!r} is not an integer of at least {lowest}")
+        return value
+
+    return parse
+
+
+_limit = _at_least(1)
 
 
 def cli(argv: list[str]) -> int:
@@ -46,27 +61,49 @@ def cli(argv: list[str]) -> int:
         print(refusal, file=sys.stderr)
         return 2
     parser = argparse.ArgumentParser(prog="npm run paid:eval --", description="Score retrieval and answers against eval/questions.jsonl.")
-    parser.add_argument("--mode", choices=run.MODES, default="vector", help="the retrieval mode (default: vector)")
+    parser.add_argument("--mode", choices=(*run.MODES, "all"), default="vector",
+                        help="the retrieval mode, or all to run each of them from one commit (default: vector)")
+    parser.add_argument("--chunk-tokens", type=_at_least(MIN_CHUNK_TOKENS), metavar="N",
+                        help=f"the chunker's token budget for this run (default: {chunking.CHUNK_TOKENS}, from chunking.py)")
+    parser.add_argument("--chunk-overlap", type=_at_least(0), metavar="N",
+                        help=f"the overlap between chunks for this run, under the budget (default: {chunking.CHUNK_OVERLAP})")
     parser.add_argument("--limit", type=_limit, metavar="N", help="run only the first N questions and skip the calibration pass; the result goes to scratch")
     parser.add_argument("--dry-run", action="store_true", help="run only the free preflight and print the plan; no paid call")
     try:
         args = parser.parse_args(argv)
+        tokens = chunking.CHUNK_TOKENS if args.chunk_tokens is None else args.chunk_tokens
+        overlap = chunking.CHUNK_OVERLAP if args.chunk_overlap is None else args.chunk_overlap
+        if overlap >= tokens:
+            parser.error(f"--chunk-overlap {overlap} must be under the token budget {tokens}")
     except SystemExit as e:  # argparse exits 0 after --help and 2 on a bad argument
         return e.code
+    modes = run.MODES if args.mode == "all" else (args.mode,)
+    try:
+        rerank_on = settings.rerank_on()
+    except RuntimeError as e:  # a RERANK value other than on or off
+        print(f"paid:eval: {e}", file=sys.stderr)
+        return 2
+    if "hybrid_rerank" in modes and not rerank_on:
+        print(f"paid:eval: RERANK=off, so --mode {args.mode} cannot run hybrid_rerank and its result would carry a mode it "
+              "did not run; set RERANK=on, or run --mode vector or --mode hybrid", file=sys.stderr)
+        return 2
+    # Read when called by the chunker, the workspace key, the preflight's plan and the result's settings.
+    chunking.CHUNK_TOKENS, chunking.CHUNK_OVERLAP = tokens, overlap
     # `npm run paid:eval --dry-run` (no `--`) passes no argument and sets npm_config_dry_run; honoured even with other
     # arguments, since a dry run is the safe reading.
     dry_run = args.dry_run or os.environ.get("npm_config_dry_run", "").lower() == "true"
-    sha, notes = asyncio.run(preflight.preflight(args.limit))
+    sha, notes = asyncio.run(preflight.preflight(args.limit, modes))
     if dry_run:
         print("dry run: preflight only, no paid call made")
         return 0
-    path = asyncio.run(run.evaluate(args.mode, args.limit, sha, notes))
-    result = json.loads(path.read_text(encoding="utf-8"))
-    print(f"\nresult: {path}\ndestination: {result['destination']}")
-    for note in result["notes"]:
-        print(f"note: {note}")
-    for name, value in result["metrics"].items():
-        print(f"{name}: {value}")
+    for mode in modes:
+        path = asyncio.run(run.evaluate(mode, args.limit, sha, notes))
+        result = json.loads(path.read_text(encoding="utf-8"))
+        print(f"\nmode: {mode}\nresult: {path}\ndestination: {result['destination']}")
+        for note in result["notes"]:
+            print(f"note: {note}")
+        for name, value in result["metrics"].items():
+            print(f"{name}: {value}")
     return 0
 
 

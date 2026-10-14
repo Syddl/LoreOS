@@ -30,7 +30,11 @@ def count_tokens(text: str) -> int:
     return len(_encoding().encode(text))
 
 
-def chunk(sections: list[Section], max_tokens: int = CHUNK_TOKENS, overlap_tokens: int = CHUNK_OVERLAP) -> list[Chunk]:
+def chunk(sections: list[Section], max_tokens: int | None = None, overlap_tokens: int | None = None) -> list[Chunk]:
+    """The module's CHUNK_TOKENS and CHUNK_OVERLAP unless given, read at each call: the evaluation's chunk flags set
+    them for a run, and ingest calls this without arguments."""
+    max_tokens = CHUNK_TOKENS if max_tokens is None else max_tokens
+    overlap_tokens = CHUNK_OVERLAP if overlap_tokens is None else overlap_tokens
     chunks: list[Chunk] = []
     for section in sections:
         for text in _split(section.text, max_tokens, overlap_tokens):

@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import subprocess
+import time
 import uuid
 from types import SimpleNamespace
 
@@ -14,7 +15,7 @@ import openai
 import pytest
 
 from conftest import sql
-from loreos import answering, chunking, llm, settings
+from loreos import answering, chunking, llm, rerank, settings
 from loreos.db import RETRIES
 from loreos.evaluation import dataset, run
 from pdf import make_pdf
@@ -145,7 +146,7 @@ def test_a_full_run_writes_every_field_to_the_results_dir(ev):
     assert result["settings"] == {
         "embedding_model": settings.embedding_model(), "answer_model": settings.answer_model(), "judge_model": settings.judge_model(),
         "chunk_tokens": chunking.CHUNK_TOKENS, "chunk_overlap": chunking.CHUNK_OVERLAP, "k": 5, "search_k": 10,
-        "openai_base_url_host": "0.0.0.0",
+        "rrf_k": 60, "rerank_model": rerank.RERANK_MODEL, "openai_base_url_host": "0.0.0.0",
     }
     the_manifest = dataset.read_manifest(dataset.MANIFEST)
     assert result["corpus_hash"] == dataset.corpus_hash(the_manifest)
@@ -408,9 +409,92 @@ def test_the_api_host_never_carries_the_url_s_credentials_port_or_path(ev, monke
     assert b"secret" not in path.read_bytes() and b"8443" not in path.read_bytes()
 
 
-def test_only_the_vector_mode_runs():
-    with pytest.raises(ValueError, match="'hybrid'"):
-        asyncio.run(run.evaluate("hybrid", None, SHA, []))
+def test_an_unknown_mode_is_refused():
+    with pytest.raises(ValueError, match="'bogus'"):
+        asyncio.run(run.evaluate("bogus", None, SHA, []))
+
+
+def test_a_hybrid_run_labels_its_result_and_every_answer_with_its_mode(ev, monkeypatch):
+    modes = []
+    real = answering.answer_from_hits
+
+    async def recording(question, hits, mode):
+        modes.append(mode)
+        return await real(question, hits, mode)
+
+    monkeypatch.setattr(answering, "answer_from_hits", recording)
+    path = asyncio.run(run.evaluate("hybrid", None, SHA, []))
+    assert re.fullmatch(rf"\d{{8}}T\d{{6}}Z-hybrid-{SHA[:8]}\.json", path.name)
+    assert load(path)["mode"] == "hybrid" and set(modes) == {"hybrid"} and len(modes) == 60
+
+
+def test_search_ms_covers_the_rerank(ev, monkeypatch):
+    def slow(query, hits):
+        time.sleep(0.05)
+        return hits
+
+    monkeypatch.setattr(rerank, "rerank", slow)
+    rows = load(asyncio.run(run.evaluate("hybrid_rerank", 3, SHA, [])))["questions"]
+    assert len(rows) == 3 and all(row["search_ms"] >= 50 for row in rows)
+
+
+def test_the_chunk_budget_reaches_ingest_the_key_and_the_settings(ev, monkeypatch):
+    committed = run.workspace_name(dataset.read_manifest(dataset.MANIFEST))
+    monkeypatch.setattr(chunking, "CHUNK_TOKENS", 8)  # under one topic's sentence, so ingest must split it
+    monkeypatch.setattr(chunking, "CHUNK_OVERLAP", 2)
+    result = load(evaluate(limit=1))
+    assert (result["settings"]["chunk_tokens"], result["settings"]["chunk_overlap"]) == (8, 2)
+    assert result["workspace"]["name"] != committed
+    [(count, longest)] = sql("select count(*), max(token_count) from loreos.chunks")
+    assert count > CHUNKS and longest <= 8
+
+
+REAL_TREE_CLEAN = run.tree_clean  # before ev stubs it
+
+
+def git(repo, *args):
+    """git in repo with an identity of its own: CI runners have none."""
+    identity = ["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"]
+    subprocess.run(["git", *identity, *args], cwd=repo, check=True, capture_output=True)
+
+
+@pytest.fixture
+def repo(tmp_path, monkeypatch):
+    """A git repository at ROOT, with RESULTS_DIR inside it at eval/results and one committed file."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    git(root, "init", "-q")
+    (root / "tracked.txt").write_text("v1")
+    git(root, "add", "tracked.txt")
+    git(root, "commit", "-q", "-m", "one")
+    monkeypatch.setattr(dataset, "ROOT", root)
+    monkeypatch.setattr(dataset, "RESULTS_DIR", root / "eval" / "results")
+    dataset.RESULTS_DIR.mkdir(parents=True)
+    return root
+
+
+def test_an_untracked_result_directly_in_the_results_dir_leaves_the_tree_clean(repo):
+    (dataset.RESULTS_DIR / "20261014T000000Z-vector-01234567.json").write_text("{}")
+    assert run.tree_clean() is True
+    for dirty in [dataset.RESULTS_DIR / "x.txt", dataset.RESULTS_DIR / "sub" / "x.json", dataset.RESULTS_DIR / "x.json.part",
+                  repo / "backend" / "x.py", repo / "x.json"]:
+        dirty.parent.mkdir(parents=True, exist_ok=True)
+        dirty.write_text("x")
+        assert run.tree_clean() is False, dirty
+        dirty.unlink()
+    assert run.tree_clean() is True
+    (repo / "tracked.txt").write_text("v2")
+    assert run.tree_clean() is False
+
+
+def test_every_mode_from_one_commit_writes_its_own_committed_result(ev, repo, monkeypatch):
+    """--mode all's runs, in its order, with the real tree_clean: each earlier result is untracked when the next writes."""
+    monkeypatch.setattr(run, "tree_clean", REAL_TREE_CLEAN)
+    monkeypatch.setattr(rerank, "rerank", lambda query, hits: hits)
+    paths = [asyncio.run(run.evaluate(mode, None, SHA, [])) for mode in run.MODES]
+    assert [path.parent for path in paths] == [dataset.RESULTS_DIR] * 3
+    assert [load(path)["mode"] for path in paths] == ["vector", "hybrid", "hybrid_rerank"]
+    assert not dataset.SCRATCH_DIR.exists()
 
 
 def test_every_committed_result_passes_the_committed_result_check():

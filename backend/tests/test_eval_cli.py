@@ -5,6 +5,7 @@ import os
 
 import pytest
 
+from loreos import chunking
 from loreos.evaluation import preflight, run
 from loreos.evaluation.__main__ import cli
 
@@ -18,8 +19,8 @@ def spy(monkeypatch, tmp_path):
     """Replace the preflight and the run; the list records each call with its arguments."""
     ran: list[tuple] = []
 
-    async def fake_preflight(limit):
-        ran.append(("preflight", limit))
+    async def fake_preflight(limit, modes):
+        ran.append(("preflight", limit, modes, chunking.CHUNK_TOKENS, chunking.CHUNK_OVERLAP))
         return SHA, NOTES
 
     async def fake_evaluate(mode, limit, sha, notes):
@@ -30,22 +31,79 @@ def spy(monkeypatch, tmp_path):
 
     monkeypatch.setattr(preflight, "preflight", fake_preflight)
     monkeypatch.setattr(run, "evaluate", fake_evaluate)
+    # The chunk flags assign these; monkeypatch restores the committed values after each test.
+    monkeypatch.setattr(chunking, "CHUNK_TOKENS", chunking.CHUNK_TOKENS)
+    monkeypatch.setattr(chunking, "CHUNK_OVERLAP", chunking.CHUNK_OVERLAP)
     for name in [name for name in os.environ if name.lower().startswith("npm_config_")]:
         monkeypatch.delenv(name)  # npm run check:all sets many; each test sets only the ones it is about
     return ran
 
 
+DEFAULT_CHUNKS = (chunking.CHUNK_TOKENS, chunking.CHUNK_OVERLAP)
+
+
 def test_no_argument_runs_the_preflight_then_the_whole_run_at_its_commit(spy, tmp_path, capsys):
     assert cli([]) == 0
-    assert spy == [("preflight", None), ("evaluate", "vector", None, SHA, NOTES)]
+    assert spy == [("preflight", None, ("vector",), *DEFAULT_CHUNKS), ("evaluate", "vector", None, SHA, NOTES)]
     out = capsys.readouterr().out
     assert str(tmp_path / "result.json") in out and "destination: scratch" in out
     assert "recall_at_5: 0.5" in out and "judge_agreement: None" in out and "scratch: --limit 3 was given" in out
 
 
 def test_mode_and_limit_reach_the_preflight_and_the_run(spy):
-    assert cli(["--mode", "vector", "--limit", "3"]) == 0
-    assert spy == [("preflight", 3), ("evaluate", "vector", 3, SHA, NOTES)]
+    assert cli(["--mode", "hybrid", "--limit", "3"]) == 0
+    assert spy == [("preflight", 3, ("hybrid",), *DEFAULT_CHUNKS), ("evaluate", "hybrid", 3, SHA, NOTES)]
+
+
+def test_mode_all_runs_one_preflight_then_every_mode_at_its_commit(spy, capsys):
+    assert cli(["--mode", "all"]) == 0
+    assert spy == [
+        ("preflight", None, run.MODES, *DEFAULT_CHUNKS),
+        *[("evaluate", mode, None, SHA, NOTES) for mode in ("vector", "hybrid", "hybrid_rerank")],
+    ]
+    out = capsys.readouterr().out
+    assert [line for line in out.splitlines() if line.startswith("mode: ")] == ["mode: vector", "mode: hybrid", "mode: hybrid_rerank"]
+
+
+def test_the_chunk_flags_set_the_chunker_before_the_preflight(spy):
+    assert cli(["--chunk-tokens", "250", "--chunk-overlap", "25"]) == 0
+    assert spy[0] == ("preflight", None, ("vector",), 250, 25)
+
+
+def test_one_chunk_flag_keeps_the_other_s_committed_value(spy):
+    assert cli(["--chunk-tokens", "1000"]) == 0
+    assert spy[0][3:] == (1000, DEFAULT_CHUNKS[1])
+
+
+@pytest.mark.parametrize("argv", [["--chunk-tokens", "250", "--chunk-overlap", "250"], ["--chunk-overlap", str(DEFAULT_CHUNKS[0])]])
+def test_an_overlap_not_under_the_budget_exits_2_before_the_preflight(spy, argv, capsys):
+    assert cli(argv) == 2
+    assert spy == []
+    assert "must be under the token budget" in capsys.readouterr().err
+    assert (chunking.CHUNK_TOKENS, chunking.CHUNK_OVERLAP) == DEFAULT_CHUNKS
+
+
+@pytest.mark.parametrize("argv", [["--mode", "hybrid_rerank"], ["--mode", "all"]])
+def test_rerank_off_refuses_a_run_that_would_need_the_reranker_before_the_preflight(spy, monkeypatch, argv, capsys):
+    monkeypatch.setenv("RERANK", "off")
+    assert cli(argv) == 2
+    assert spy == []
+    assert "RERANK=off" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("mode", ["vector", "hybrid"])
+def test_rerank_off_still_runs_the_modes_without_the_reranker(spy, monkeypatch, mode):
+    monkeypatch.setenv("RERANK", "off")
+    assert cli(["--mode", mode, "--dry-run"]) == 0
+    assert [call[:3] for call in spy] == [("preflight", None, (mode,))]
+
+
+def test_a_rerank_value_other_than_on_or_off_exits_2_with_the_fix(spy, monkeypatch, capsys):
+    monkeypatch.setenv("RERANK", "maybe")
+    assert cli(["--mode", "vector"]) == 2
+    assert spy == []
+    err = capsys.readouterr().err
+    assert "RERANK must be on or off" in err and "Traceback" not in err
 
 
 @pytest.mark.parametrize("argv", [["--dry-run"], ["--dry-run", "--limit", "2"]])
@@ -71,6 +129,9 @@ def test_npm_dry_run_without_the_separator_runs_only_the_preflight(spy, monkeypa
         ("lim", "npm run paid:eval -- --limit N"),  # argparse would take --lim as --limit; npm takes it too
         ("li", "npm run paid:eval -- --limit N"),
         ("mo", "npm run paid:eval -- --mode vector"),
+        ("chunk_tokens", "npm run paid:eval -- --chunk-tokens N --chunk-overlap N"),
+        ("chunk_overlap", "npm run paid:eval -- --chunk-tokens N --chunk-overlap N"),
+        ("chunk", "npm run paid:eval -- --chunk-tokens N --chunk-overlap N"),
     ],
 )
 def test_a_flag_npm_swallowed_is_refused_with_the_separator_form(spy, monkeypatch, capsys, name, form):
@@ -88,7 +149,11 @@ def test_npm_s_own_settings_do_not_stop_the_run(spy, monkeypatch, name):
     assert cli(["--dry-run"]) == 0
 
 
-@pytest.mark.parametrize("argv", [["--limit", "0"], ["--limit", "-1"], ["--limit", "two"], ["--mode", "hybrid"], ["--bogus"], ["now"]])
+@pytest.mark.parametrize(
+    "argv",
+    [["--limit", "0"], ["--limit", "-1"], ["--limit", "two"], ["--mode", "bogus"], ["--bogus"], ["now"],
+     ["--chunk-tokens", "49"], ["--chunk-tokens", "many"], ["--chunk-overlap", "-1"]],
+)
 def test_a_bad_argument_exits_2_before_the_preflight(spy, argv, capsys):
     assert cli(argv) == 2
     assert spy == []
@@ -108,11 +173,11 @@ def test_help_spends_nothing(spy, argv, capsys):
 
 
 def test_a_preflight_that_stops_never_reaches_the_run(spy, monkeypatch):
-    async def stopping_preflight(limit):
-        spy.append(("preflight", limit))
+    async def stopping_preflight(limit, modes):
+        spy.append(("preflight", limit, modes))
         raise SystemExit("preflight: the git tree is not clean; commit or remove the changes")
 
     monkeypatch.setattr(preflight, "preflight", stopping_preflight)
     with pytest.raises(SystemExit, match="the git tree is not clean"):
         cli([])
-    assert spy == [("preflight", None)]
+    assert spy == [("preflight", None, ("vector",))]
