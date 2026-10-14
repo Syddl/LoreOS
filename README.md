@@ -46,13 +46,13 @@ Open http://localhost:8000 and sign up:
 
 ### Without Docker
 
-With [uv](https://docs.astral.sh/uv/) and Node 22:
+With [uv](https://docs.astral.sh/uv/) and Node 22, the last three each in its own terminal:
 
 ```sh
 npm ci --prefix frontend
 npm run db:migrate
 npm run dev:api        # the api on 127.0.0.1:8000
-npm run dev:web        # the UI with hot reload; it forwards /api to the api
+npm run dev:web        # the UI with hot reload; open the address it prints. It forwards /api to the api
 npm run paid:worker    # processes uploads, through your OpenAI key
 ```
 
@@ -154,7 +154,7 @@ Judge agreement with Claude's grades of 30 calibration answers: 1.000. Search ti
 
 ## API
 
-Create a key in a workspace's settings, under API keys.
+A workspace owner creates a key in the workspace's settings, under API keys.
 - It is shown once, and it starts with `lo_sk_`.
 - It has a member's access to that workspace alone: it can add documents, list them and ask.
 
@@ -194,7 +194,7 @@ An answer looks like this; `found` is false, with the refusal as `answer`, when 
 
 ## Demo
 
-To try LoreOS on the evaluation corpus, part of the GitLab handbook and a few US government PDFs:
+To try LoreOS on the evaluation corpus, part of the GitLab handbook and a few US government PDFs. These steps need uv, as in [Without Docker](#without-docker):
 
 1. Run `npm run eval:fetch`. It downloads the corpus and checks each file's hash.
 2. Create a workspace in the UI, and copy its id from the address bar.
@@ -211,7 +211,7 @@ npm run check:all                            # every check CI runs, except the i
 npm run check:compose                        # the image build and the stack, in CI's own job
 ```
 
-Every command that calls OpenAI is a `paid:` script. Each is listed in [package.json](package.json).
+Every npm script that calls OpenAI by itself is a `paid:` script. Each is listed in [package.json](package.json). The running api and worker spend too, on each upload and each question.
 
 ## Contributing
 
@@ -234,4 +234,5 @@ The evaluation corpus is not in this repository: `npm run eval:fetch` downloads 
 - Its GitLab handbook text is under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).
 - Its PDFs are US government works.
 - [Decision 0003](docs/decisions/0003-evaluation-corpus-and-judge.md) has the details.
+- `eval/judge_calibration.jsonl` and the files under `eval/results/` quote handbook passages, under CC BY-SA 4.0. [eval/README.md](eval/README.md) covers their license.
 - A workspace loaded with that corpus holds the text under those terms.

@@ -137,3 +137,20 @@ def test_a_workspace_id_npm_swallowed_is_refused_with_the_separator_form(corpus,
     monkeypatch.setenv("npm_config_workspace_id", "x")
     assert demo.cli([]) == 2
     assert "npm run paid:demo-load -- --workspace-id <id>" in capsys.readouterr().err
+
+
+def test_a_file_that_fails_is_reported_and_the_run_goes_on_then_exits_1(owned, corpus, monkeypatch, capsys):
+    """Spec behaviour 5: one bad file does not stop the others, and the exit says some failed."""
+    real = llm.embed
+
+    async def refuse_the_pdf(texts):
+        if any("Page one sets the alpha rule." in text for text in texts):
+            raise RuntimeError("the embedding request was refused (faked)")
+        return await real(texts)
+
+    monkeypatch.setattr(llm, "embed", refuse_the_pdf)
+    assert demo.cli(["--workspace-id", owned]) == 1
+    statuses = dict(documents(owned))
+    assert statuses[MD] == "processed" and set(statuses.values()) == {"processed", "failed"}
+    err = capsys.readouterr().err
+    assert "1 files were not processed" in err

@@ -29,20 +29,23 @@ function refuses(name, run, fragment) {
   }
 }
 
-// A result file as paid:eval writes it, with distinct values per metric so a cell read from the wrong key shows.
-function result(mode, { sha = 'a'.repeat(40), created = '2026-10-14T10:00:00Z', destination = 'results', metrics = {} } = {}) {
+// A result file as paid:eval writes it, with distinct values per metric and per mode, so a cell read from the wrong
+// key, or a row filled from another mode's file, shows. Judge agreement is the same in every mode unless set.
+function result(mode, { sha = 'a'.repeat(40), created = '2026-10-14T10:00:00Z', destination = 'results', calibration = 'h', k = 5 } = {}) {
+  const step = MODES.indexOf(mode) / 10;
+  const at = (value) => Math.round((value + step) * 1000) / 1000;
   return {
     file: `${created.replace(/[-:]/g, '')}-${mode}-${sha.slice(0, 8)}.json`,
     data: {
       schema: 1, git_sha: sha, created_at: created, mode, destination,
-      settings: { embedding_model: 'e', answer_model: 'a', judge_model: 'j', chunk_tokens: 500, chunk_overlap: 50, k: 5, rerank_model: 'r' },
-      corpus_hash: 'c', questions_hash: 'q', calibration_hash: 'h',
+      settings: { embedding_model: 'e', answer_model: 'a', judge_model: 'j', chunk_tokens: 500, chunk_overlap: 50, k, rerank_model: 'r' },
+      corpus_hash: 'c', questions_hash: 'q', calibration_hash: calibration,
       counts: { questions: 81, answerable: 66, calibration_rows: 30 },
       metrics: {
-        recall_at_5: 0.111, mrr_at_10: 0.222, citation_accuracy: 0.333, unanswerable_refused: 0.444, answerable_refused: 0.555,
-        faithfulness: 0.666, judge_agreement: 0.777, ...metrics,
+        recall_at_5: at(0.111), mrr_at_10: at(0.222), citation_accuracy: at(0.333), unanswerable_refused: at(0.444),
+        answerable_refused: at(0.555), faithfulness: at(0.666), judge_agreement: 0.777,
       },
-      latency_ms: { search_p50: 1234.4, search_p95: 5678.5 },
+      latency_ms: { search_p50: 1234.4 + step * 10000, search_p95: 5678.5 + step * 10000 },
     },
   };
 }
@@ -51,9 +54,13 @@ const README = `# LoreOS\n\n${START}\n${END}\n`;
 
 // The golden row: every cell from its own key, formatted as the files have it, nothing else.
 const golden = buildBlock(group(), 'hybrid_rerank').split('\n');
-check('golden row for vector', golden.includes('| Vector search only | 0.111 | 0.222 | 0.333 | 0.444 | 0.555 | 0.666 | 1234 ms | 5679 ms |'),
-  golden.find((line) => line.startsWith('| Vector')));
-check('the default row is marked', golden.some((line) => line.startsWith('| **+ local reranker (served by default)** |')));
+for (const line of [
+  '| Vector search only | 0.111 | 0.222 | 0.333 | 0.444 | 0.555 | 0.666 | 1234 ms | 5679 ms |',
+  '| + keyword search, fused with RRF | 0.211 | 0.322 | 0.433 | 0.544 | 0.655 | 0.766 | 2234 ms | 6679 ms |',
+  '| **+ local reranker (served by default)** | 0.311 | 0.422 | 0.533 | 0.644 | 0.755 | 0.866 | 3234 ms | 7679 ms |',
+]) {
+  check(`golden row: ${line.slice(2, 30)}`, golden.includes(line), golden.find((row) => row.startsWith(line.slice(0, 12))));
+}
 check('judge agreement is one value when the files agree', golden.some((line) => line.includes("Claude's grades of 30 calibration answers: 0.777.")));
 const split = group();
 split[1].data.metrics.judge_agreement = 0.9;
@@ -72,6 +79,10 @@ check('an edited cell is a difference that names it', difference?.includes('0.22
 refuses('mixed commits make no complete group', () => findGroup([result('vector'), result('hybrid'), result('hybrid_rerank', { sha: 'b'.repeat(40) })]),
   'no complete group');
 refuses('a missing mode', () => findGroup([result('vector'), result('hybrid')]), 'no complete group');
+refuses('mixed calibration rows make no complete group',
+  () => findGroup([result('vector'), result('hybrid'), result('hybrid_rerank', { calibration: 'other' })]), 'no complete group');
+refuses('mixed settings make no complete group', () => findGroup([result('vector'), result('hybrid'), result('hybrid_rerank', { k: 10 })]),
+  'no complete group');
 refuses('two results of one mode in the newest group', () => findGroup([...group(), result('hybrid', { created: '2026-10-14T11:00:00Z' })]),
   '2 hybrid results');
 const oldDuplicate = [...group({ sha: 'd'.repeat(40), created: '2026-10-13T09:00:00Z' }), result('vector', { sha: 'd'.repeat(40), created: '2026-10-13T10:00:00Z' })];
