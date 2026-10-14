@@ -53,6 +53,7 @@ The recording waits on the browser extension.
 |---|---|---|---|---|---|---|
 | 2026-10-14T14:45:00.607Z | p5-readme-demo | 6db4b7dc | `npm run check:all` | PASS | 348.1 s | the live demo load (paid) and the recording; check:compose (its own CI job); CI on Linux |
 | 2026-10-14 (by hand, live) | p5-readme-demo | 9e9160d | `npm run paid:demo-load -- --workspace-id <Demo> --dry-run`, then the paid run, then the run again, each approved at the ask | PASS | | The dry run planned 48 files and 195,274 tokens. The load processed 48 of 48, about $0.004. The second run planned 0 files and 0 tokens. Not covered: the UI showing them (the recording) |
+| 2026-10-14T15:07:38.973Z | p5-readme-demo | 4e90430b | `npm run check:all` | PASS | 379.8 s | the recording (waits on the browser extension); check:compose (its own CI job); CI on Linux |
 
 ## Port ledger
 
