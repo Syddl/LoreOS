@@ -9,15 +9,18 @@
     "paid:smoke": "uv --directory backend run python -m loreos.smoke",
     "paid:eval": "uv --directory backend run python -m loreos.evaluation",
     "paid:worker": "uv --directory backend run python -m loreos.worker",
+    "paid:demo-load": "uv --directory backend run python -m loreos.demo",
     "eval:fetch": "uv --directory backend run python -m loreos.evaluation.fetch",
     "eval:calibration-draft": "uv --directory backend run python -m loreos.evaluation.calibration",
+    "readme:table": "node scripts/readme-table.mjs",
     "check:hooks": "node scripts/check-hooks.mjs",
     "check:agent-hooks": "node scripts/check-agent-hooks.mjs",
     "check:backend": "node scripts/check-backend.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:spend": "node scripts/check-spend.mjs",
     "check:frontend": "node scripts/check-frontend.mjs",
+    "check:readme": "node scripts/check-readme.mjs",
     "check:compose": "node scripts/check-compose.mjs",
-    "check:all": "npm run check:hooks && npm run check:agent-hooks && npm run check:backend && npm run check:licenses && npm run check:spend && npm run check:frontend"
+    "check:all": "npm run check:hooks && npm run check:agent-hooks && npm run check:backend && npm run check:licenses && npm run check:spend && npm run check:frontend && npm run check:readme"
   }
 }

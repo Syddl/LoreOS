@@ -99,6 +99,8 @@ const cases = [
   // state the text does not show (package.json, .npmrc, an earlier `export npm_config_*=` or
   // PYTHONPATH), so every paid spelling asks and the operator approves the preflight too.
   ['Bash', 'npm run paid:smoke -- --dry-run', 'ask'],
+  ['Bash', 'npm run paid:demo-load -- --workspace-id 00000000-0000-0000-0000-000000000001 --dry-run', 'ask'],
+  ['PowerShell', 'uv --directory backend run python -m loreos.demo --workspace-id x', 'ask'],
   ['Bash', 'npm run paid:smoke -- --help', 'ask'],
   ['PowerShell', 'npm.cmd run paid:smoke -- --dry-run', 'ask'],
   ['Bash', 'export npm_config_script_shell=evil.sh; npm run paid:smoke -- --dry-run', 'ask'],

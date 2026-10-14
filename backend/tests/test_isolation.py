@@ -42,6 +42,7 @@ SYSTEM_SESSION_FILES = {
     "routes/auth.py",
     "routes/workspaces.py",
     "evaluation/run.py",
+    "demo.py",  # spec P5: one read of the target workspace's name and whether it has an owner
 }
 # The files that may build an engine or read DATABASE_URL themselves, each with its reason. An engine built anywhere
 # else opens connections the system_session scan does not see, which RLS binds only if that code switches the role.
