@@ -22,7 +22,9 @@ Kill switch: none. Docs, a check and a loader script.
 |---|---|---|---|
 | `npm run readme:table` | root script | `scripts/readme-table.mjs` | Reads `eval/results/*.json` and takes the newest complete group: one `vector`, one `hybrid` and one `hybrid_rerank` file sharing `git_sha`, `corpus_hash`, `questions_hash`, `calibration_hash` and `settings`, each with `destination` `results`. It rewrites `README.md` between `<!-- results:start -->` and `<!-- results:end -->`. No dependencies. |
 | `check:readme` | check | `scripts/check-readme.mjs` | Builds the same block in memory and fails, showing the difference, when the README's block differs. It also fails on any glossary word listed under `avoid` in `.claude/harness.json`. Wired into `check:all` and CI before the end anchor. |
-| `npm run paid:demo-load -- --workspace <id> [--dry-run]` | root script | `python -m loreos.demo` | A free preflight, then the paid part: each fetched corpus file through `ingest.ingest` into that workspace, inline, as the evaluation does. |
+| `npm run paid:demo-load -- --workspace-id <id> [--dry-run]` | root script | `python -m loreos.demo` | A free preflight, then the paid part: each fetched corpus file through `ingest.ingest` into that workspace, inline, one file at a time. The flag is not `--workspace`, which is npm's own option. |
+| The demo's cross-workspace read | `system_session()` | `backend/loreos/demo.py` | One read, as the connecting role: the `loreos.workspaces` row with that id, and whether it has an owner in `loreos.memberships`. `loreos_app` has no grant on either table. The ingest itself runs in `workspace_session`. |
+| Decision 0011 | doc | `docs/decisions/0011-readme-numbers.md`, `AGENTS.md` | How the README-number rule is read: quality, latency and cost numbers come only from result files, while configuration facts come from the code. |
 | README | doc | `README.md` | Sections below. |
 | Recording | asset | `docs/assets/demo.gif` | The real UI on the operator's machine answering a question about the demo workspace, with a citation open. |
 
@@ -53,14 +55,16 @@ Kill switch: none. Docs, a check and a loader script.
 
    It never fills a cell by hand or by default. A missing metric prints as the file has it (`null` becomes "n/a"), never as 0.
 3. **`check:readme` runs in `check:all` and in CI.** The AGENTS.md rule on README numbers now has a check behind it for the table.
-   - **The rule** is read as numbers about quality, latency or cost, which only result files produce. Configuration facts, such as ports and caps, come from the code.
+   - **The rule** is read as numbers about quality, latency or cost, which only result files produce. Configuration facts, such as ports and caps, come from the code. Decision 0011 records this reading.
    - **Prose** carries no quality, latency or cost number, and points at the table instead. Prose stays a review item.
 4. **Retrieval claims link their evidence.** Each claim in "how retrieval works" that a measurement supports links the decision and the result files that show it: decision 0009 for the chunk size, which was measured in `vector` mode, and decision 0010 for the default mode.
-5. **`paid:demo-load` is idempotent.** Uploads dedupe by content within a workspace, so a second run adds no document and makes no embedding call. The free preflight checks four things before the first paid call, and prints how many files and tokens it will embed. `--dry-run` stops there.
+5. **`paid:demo-load` is idempotent.** Uploads dedupe by content within a workspace, so a second run adds no document and makes no embedding call. The free preflight checks these before the first paid call, and prints how many files and tokens it will embed. `--dry-run`, or `npm_config_dry_run=true`, stops there.
    - the database, the migration head, the grants and the key (smoke's preflight, which loads no reranker);
-   - the corpus hashes;
-   - that the workspace exists;
-   - that the workspace is not an `eval-*` workspace.
+   - that the embedding model is in the API's model list;
+   - the corpus files and their hashes;
+   - that the workspace exists, is not an `eval-*` workspace (`workspaces.EVAL_PREFIX`), and has an owner.
+
+   A file that is not processed is reported, and the run exits 1 after the last file.
 6. **The wording is fixed.**
    - The tagline and the status line are rewritten for a working v1. The current tagline says "organization", which the glossary replaces with "workspace".
    - `docs/KNOWN-GAPS.md` is reread, and stale rows are corrected.
@@ -75,7 +79,7 @@ Kill switch: none. Docs, a check and a loader script.
 | 5 | Demo loader | `tests/test_demo.py`, with the fakes | A second run embeds nothing. An `eval-*` or unknown workspace, or a missing corpus file, stops before any embedding. `--dry-run` embeds nothing. | Real OpenAI |
 | 5 | Demo load, live | `npm run paid:demo-load` twice (each asks) | The first embeds about 195k tokens, about $0.004. The second adds no document. Ledger rows by hand. | |
 | 4, 6 | Wording and links | review | Glossary terms only, and links resolve | |
-| | Recording | by hand, the operator logged in | `docs/assets/demo.gif` shows a cited answer with its passage open. The ledger names the question asked. | |
+| | Recording | by hand, the operator logged in | `docs/assets/demo.gif` shows a cited answer with its passage open. It is recorded under 640 px wide, so the header hides the email, and every frame is checked for personal data before staging. The ledger names the question asked. | |
 
 ## Spend
 
