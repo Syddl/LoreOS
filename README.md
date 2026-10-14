@@ -1,20 +1,30 @@
 # LoreOS
 
+[![CI](https://github.com/Syddl/LoreOS/actions/workflows/ci.yml/badge.svg)](https://github.com/Syddl/LoreOS/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Answers from your team's documents, with the passage each answer came from.
 
-LoreOS is a self-hostable document Q&A engine.
-- **Add documents:** put PDF, Markdown, text and Word files, or a web page, into a workspace.
-- **Ask:** the answer cites the passages it used. When the documents don't say, LoreOS replies "I couldn't find this in your documents." instead of guessing.
-- **Measured retrieval:** every retrieval change is scored against a written evaluation set, and the results table below is generated from those committed runs.
+LoreOS is a self-hostable document Q&A engine. Put PDF, Markdown, text and Word files, or a web page, into a workspace, and ask a question:
+- **The answer cites its sources.** Each citation opens the exact passage it came from.
+- **It doesn't guess.** When the documents don't say, LoreOS replies "I couldn't find this in your documents."
+- **Its retrieval is measured.** Every retrieval change is scored against a written evaluation set, and the [results table](#results) is generated from those committed runs.
 
-**Status:** v1 is in progress. These work today:
-- the engine;
-- the web UI;
-- workspaces with invites;
-- the background worker;
-- API keys.
+## Features
 
-The embeddable widget is next. The plan and its decisions are in [docs/sdd/v1/brief.md](docs/sdd/v1/brief.md).
+- **Hybrid retrieval:**
+  - vector search (pgvector);
+  - keyword search (Postgres full-text);
+  - reciprocal rank fusion;
+  - a local cross-encoder reranker that runs on the CPU, with no GPU and no extra API.
+- **Cited answers, with a refusal** when the documents don't hold the answer.
+- **Workspaces** isolated by Postgres row-level security, with email-and-password accounts, invite links, and owner and member roles.
+- **A background worker** that ingests uploads and web pages, with retries.
+- **An HTTP API** with per-workspace keys.
+- **One Postgres:** any Postgres with pgvector. Supabase works through its session pooler, and nothing else is needed: no vector database, no queue, no cache.
+- **`docker compose up`:** one image runs the migration, the api and the worker.
+
+**Status:** v1 is in progress. Everything above works today. The embeddable widget is next. The plan and its decisions are in [docs/sdd/v1/brief.md](docs/sdd/v1/brief.md).
 
 ## Quickstart
 
@@ -68,6 +78,30 @@ Settings come from the environment, or from `.env` at the repository root. [.env
 Over https the session cookie is `Secure`.
 
 ## How it works
+
+```mermaid
+flowchart LR
+  subgraph Ingest
+    U[Upload or URL] --> W[Worker]
+    W --> P[Parse by heading or page]
+    P --> CH[Chunk]
+    CH --> EM[Embed]
+    EM --> DB[(Postgres + pgvector)]
+  end
+  subgraph Ask
+    Q[Question] --> KS[Keyword search]
+    Q --> VS[Vector search]
+    KS --> F[Reciprocal rank fusion]
+    VS --> F
+    F --> RR[Local reranker]
+    RR --> AN[Answer model]
+    AN --> CI{Cites a passage?}
+    CI -- yes --> OK[Cited answer]
+    CI -- no --> NO[Refusal]
+  end
+  DB -.-> KS
+  DB -.-> VS
+```
 
 1. **Parsing.**
    - PDFs are read page by page.
@@ -178,6 +212,19 @@ npm run check:compose                        # the image build and the stack, in
 ```
 
 Every command that calls OpenAI is a `paid:` script. Each is listed in [package.json](package.json).
+
+## Contributing
+
+Issues and pull requests are welcome.
+- `npm run check:all` passes before a pull request. CI runs the same checks, and builds the image.
+- A change to retrieval comes with an evaluation run (`npm run paid:eval`, which spends on your key), and its result files are committed as the run wrote them. The README's numbers are regenerated from those files with `npm run readme:table`, never edited by hand.
+- [AGENTS.md](AGENTS.md) lists the project's rules. The [decisions](docs/decisions/) record why things are the way they are.
+
+## Security
+
+Please report a vulnerability privately, through the repository's Security tab ("Report a vulnerability"), rather than in a public issue.
+
+[docs/KNOWN-GAPS.md](docs/KNOWN-GAPS.md) lists the gaps already known, each with the condition that would make it worth fixing.
 
 ## License
 
