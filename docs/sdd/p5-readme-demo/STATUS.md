@@ -48,13 +48,20 @@ The single carrier of state between sessions. Update it before a session ends; t
     - **The README:** an owner creates keys; the demo needs uv; the api and the worker also spend; the dev steps need their own terminals; and a bullet on the CC BY-SA excerpts.
   - **Left to the operator:** turning on private vulnerability reporting before going public, and whether to scrub machine paths from older docs.
 
+- **Merged.** The claim covers the tip (`--verify-tip`: claimed `5131124b`; the tip `8e13267` adds only ledger rows). CI on the tip passed Checks and Compose. The operator merged PR #9 into `main` as **`afcbe56`**, a merge commit, on 2026-10-14.
+- **Open: the recording** (spec Interfaces; plan phase 2, step 3). It goes in its own PR once the Claude in Chrome extension connects:
+  - recorded at under 640 px wide, so the header hides the email;
+  - asking "How much emergency medical cost does GitLab's business travel insurance cover?" in the Demo workspace, which the operator approved, at about $0.002;
+  - every frame checked before staging;
+  - then the README embeds it.
+
 ## Next step
 
-claim-green on the fix wave's tip, and CI on PR #9. Then the operator merges. The recording follows in its own PR, once the browser extension connects.
+The recording, once the browser extension connects. Then `status: done`.
 
 ## Blockers
 
-The recording waits on the browser extension.
+The recording waits on the operator connecting Claude in Chrome.
 
 ## Verification ledger
 
@@ -64,9 +71,10 @@ The recording waits on the browser extension.
 | 2026-10-14 (by hand, live) | p5-readme-demo | 9e9160d | `npm run paid:demo-load -- --workspace-id <Demo> --dry-run`, then the paid run, then the run again, each approved at the ask | PASS | | The dry run planned 48 files and 195,274 tokens. The load processed 48 of 48, about $0.004. The second run planned 0 files and 0 tokens. Not covered: the UI showing them (the recording) |
 | 2026-10-14T15:07:38.973Z | p5-readme-demo | 4e90430b | `npm run check:all` | PASS | 379.8 s | the recording (waits on the browser extension); check:compose (its own CI job); CI on Linux |
 | 2026-10-14T15:31:38.262Z | p5-readme-demo | 5131124b | `npm run check:all` | PASS | 347.3 s | the recording (its own PR, once the browser extension connects); check:compose (its own CI job); CI on Linux |
+| 2026-10-14T15:45:14.781Z | p5-merged | 7d971125 | `npm run check:all` | PASS | 340.9 s | docs only: STATUS records the merge; nothing the suite reads changed |
 
 ## Port ledger
 
 | Branch | Status | Reference |
 |---|---|---|
-| main | required | |
+| main | done | `afcbe56` (PR #9, merge commit); the recording follows in its own PR |
