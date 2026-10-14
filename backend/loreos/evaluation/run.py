@@ -217,14 +217,14 @@ async def _ask(workspace_id: uuid.UUID, question: dict) -> tuple[dict, list[str]
         search_ms = round((time.perf_counter() - start) * 1000, 1)
     error = None
     try:
-        answer = await answering.answer_from_hits(asked, hits[: answering.TOP_K])
+        answer = await answering.answer_from_hits(asked, hits[: answering.TOP_K], "vector")
     except openai.APIError:
         raise  # the model or the key is broken, so every later answer would fail too
     except Exception as e:  # no parsed answer, or a length or content-filter stop: the user would get no answer either
         if isinstance(e.__cause__, openai.APIError):
             raise  # draft_answer wraps a rejected request (BadRequestError) for its message; it is still an API failure
         error = f"{type(e).__name__}: {e}"
-        answer = answering.Answer(False, answering.REFUSAL, [], "answer_error")
+        answer = answering.Answer(False, answering.REFUSAL, [], "answer_error", "vector")
         notes.append(f"{qid}: the answer failed ({error}); recorded as refused with reason answer_error")
     judge = None
     if answer.found:

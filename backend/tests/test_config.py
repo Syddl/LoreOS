@@ -2,6 +2,8 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from loreos import settings
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,7 +22,7 @@ def test_dev_api_binds_localhost_only():
 def test_env_example_lists_exactly_the_keys_settings_reads():
     read = set(re.findall(r'_env\("([A-Z_]+)"\)', Path(settings.__file__).read_text(encoding="utf-8")))
     assert read == {"DATABASE_URL", "OPENAI_API_KEY", "OPENAI_BASE_URL", "EMBEDDING_MODEL", "ANSWER_MODEL", "JUDGE_MODEL",
-                    "ALLOWED_HOSTS"}
+                    "ALLOWED_HOSTS", "RERANK"}
     assert set(env_example()) == read
 
 
@@ -30,6 +32,20 @@ def test_env_example_defaults_match_settings():
     assert example["ANSWER_MODEL"] == settings.DEFAULT_ANSWER_MODEL
     assert example["JUDGE_MODEL"] == settings.DEFAULT_JUDGE_MODEL
     assert example["ALLOWED_HOSTS"] == settings.DEFAULT_ALLOWED_HOSTS
+    assert example["RERANK"] == settings.DEFAULT_RERANK == "on"
+
+
+@pytest.mark.parametrize("value, on", [("", True), ("on", True), ("ON", True), ("off", False), (" Off ", False)])
+def test_rerank_is_on_unless_set_off(monkeypatch, value, on):
+    monkeypatch.setenv("RERANK", value)
+    assert settings.rerank_on() is on
+
+
+def test_any_other_rerank_value_is_a_startup_problem(monkeypatch):
+    monkeypatch.setenv("RERANK", "maybe")
+    with pytest.raises(RuntimeError, match="RERANK must be on or off"):
+        settings.rerank_on()
+    assert settings.startup_problems() == ["RERANK must be on or off; fix it in .env"]
 
 
 def test_allowed_hosts_splits_the_list_and_defaults_to_localhost(monkeypatch):

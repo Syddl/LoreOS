@@ -11,6 +11,7 @@ DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 DEFAULT_ANSWER_MODEL = "gpt-5.4-mini"
 DEFAULT_JUDGE_MODEL = "gpt-6-luna"  # decision 0005
 DEFAULT_ALLOWED_HOSTS = "localhost,127.0.0.1"
+DEFAULT_RERANK = "on"
 
 
 @functools.cache
@@ -71,10 +72,18 @@ def allowed_hosts() -> list[str]:
     return [host.strip() for host in (_env("ALLOWED_HOSTS") or DEFAULT_ALLOWED_HOSTS).split(",") if host.strip()]
 
 
+def rerank_on() -> bool:
+    """The kill switch for the local reranker (spec P3): off serves the fused order where hybrid_rerank would run."""
+    value = (_env("RERANK") or DEFAULT_RERANK).lower()
+    if value not in ("on", "off"):
+        raise RuntimeError("RERANK must be on or off; fix it in .env")
+    return value == "on"
+
+
 def startup_problems() -> list[str]:
     """The message of each required setting that fails; the api and the worker refuse to start on any."""
     problems = []
-    for read in (database_url, openai_api_key):
+    for read in (database_url, openai_api_key, rerank_on):
         try:
             read()
         except RuntimeError as e:

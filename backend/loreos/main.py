@@ -15,7 +15,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.routing import Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from loreos import settings, verify_rls
+from loreos import rerank, retrieval, settings, verify_rls
 from loreos.db import engine
 from loreos.routes import auth as auth_routes
 from loreos.routes import documents, workspaces
@@ -40,8 +40,15 @@ async def lifespan(app: FastAPI):
     """Refuse to start, naming each missing or wrong setting, rather than fail on the first request (behaviour 19).
 
     Then verify_rls, as the worker does: a loreos_app that RLS does not bind would serve with only the app's filters.
+    Last, the reranker model when the api serves with it, so a missing model stops startup, not the first question.
+    The worker never searches, so it never loads it.
     """
     problems = settings.startup_problems() or await verify_rls.isolation_problems()
+    if not problems and retrieval.serving_mode() == "hybrid_rerank":
+        try:
+            rerank.model()
+        except RuntimeError as e:
+            problems = [str(e)]
     for problem in problems:
         log.error(problem)
     if problems:

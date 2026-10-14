@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import pytest
 
 from conftest import W, drain
-from loreos import answering, llm
+from loreos import answering, llm, retrieval
 from loreos.answering import REFUSAL
 
 ASK = f"{W}/ask"
@@ -60,6 +60,7 @@ def test_answer_cites_the_passage(owner, fake_embed, fake_draft):
     fake_draft.reply = llm.Draft(found=True, text="On Tuesdays [1].")
     body = owner.client.post(ASK, json={"question": "  When do we ship?  "}).json()
     assert (body["found"], body["answer"], body["reason"]) == (True, "On Tuesdays [1].", None)
+    assert body["retrieval_mode"] == retrieval.serving_mode()  # the real Answer's field, whatever the default is
     [citation] = body["citations"]
     assert citation["n"] == 1 and citation["document_id"] == document["id"]
     assert (citation["filename"], citation["heading_path"], citation["page"], citation["text"]) == (
