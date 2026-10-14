@@ -77,9 +77,16 @@ The single carrier of state between sessions. Update it before a session ends; t
 
     STATUS is not touched again until the third run has written its file.
 
+  - **Step 4 done.** All three runs went to `eval/results/` at `22688aeb`, sharing the corpus, question and calibration hashes; the ledger has one row each. The sweep cost $0.383, so the spend to date is $0.663 of $5.
+  - **Step 5 done.** [Decision 0009](../../decisions/0009-chunk-size-500-overlap-50.md) keeps 500/50, which ties 1000/100 on Recall@5 at 0.909 and wins on MRR@10, with 0.825 against 0.766.
+    - `chunking.py` is not edited, not even its comment. Its source keys the evaluation workspace, so the `--mode all` run reuses `eval-093199cc80a6` and pays no corpus embedding.
+    - `test_defaults` still pins 500/50.
+  - **Step 6 next:** `--mode all` at the commit that records this, run id `compare-all`, log `scratch/compare-all.log`. Estimate: three runs like `sweep-500` without its corpus embedding, about $0.13 each, so about $0.38. The dry run gives the upper bound.
+  - **For P5** (step 10): the README states that the chunk size was measured in `vector` mode, citing decision 0009.
+
 ## Next step
 
-Phase 3 step 4: the sweep, three paid runs. Then decision 0009.
+Phase 3 step 6: `npm run paid:eval -- --mode all`, dry run first. Then decision 0010.
 
 ## Blockers
 
@@ -91,6 +98,11 @@ None. Building the code costs nothing. The four paid runs (the chunk sweep, then
 |---|---|---|---|---|---|---|
 | 2026-10-14T08:34:23.891Z | p3-hybrid-search | 19d2c00e | `npm run check:all` | PASS | 334.7 s | real OpenAI and Supabase (phase 3's paid runs and db:migrate); check:compose (its own CI job); CI on Linux |
 | 2026-10-14T09:00:06.746Z | p3-hybrid-search | 945c93f4 | `npm run check:all` | PASS | 336.3 s | real OpenAI and Supabase (phase 3's paid runs and db:migrate); check:compose (its own CI job); CI on Linux |
+| 2026-10-14 (by hand, live) | p3-hybrid-search | 7b236d2 | `npm run db:migrate` and `npm run db:verify-rls` on Supabase, then read-only queries; `scratch/db-migrate.log`, `scratch/verify-rls.log`, `scratch/supabase-0003.log` | PASS | | Migration `0003_keyword_search` on PG 17.11. `verify-rls` printed `ok`, the `heading_text` grant included. 0 of 922 chunks have a null `tsv`. The keyword query applies RLS as `loreos_app`, in 17 ms. Not covered: index use under RLS at scale (922 chunks seq-scan) |
+| 2026-10-14 (by hand, live) | p3-hybrid-search | 7b236d2 | `npm run paid:eval -- --mode vector --chunk-tokens {250,500,1000} --chunk-overlap {25,50,100} --dry-run`, each approved at the ask; `scratch/dry-*.log` | PASS | | Every preflight step passed, with 3 new workspaces to build. Upper bounds $0.20, $0.29 and $0.47. No paid call |
+| 2026-10-14 (by hand, live) | p3-hybrid-search | 22688ae | `sweep-250`, approved at the ask; `scratch/sweep-250.log` | PASS (to `eval/results/`) | | `20261014T092118Z-vector-22688aeb.json`: Recall@5 0.894, MRR@10 0.795, faithfulness 0.935, judge agreement 1.0. Cost $0.1058 (likely $0.09, upper $0.20) |
+| 2026-10-14 (by hand, live) | p3-hybrid-search | 22688ae | `sweep-500`, approved at the ask; `scratch/sweep-500.log` | PASS (to `eval/results/`) | | `20261014T094653Z-vector-22688aeb.json`: Recall@5 0.909, MRR@10 0.825 (the same as P2's baseline), faithfulness 0.871. Cost $0.1310 (likely $0.13, upper $0.29) |
+| 2026-10-14 (by hand, live) | p3-hybrid-search | 22688ae | `sweep-1000`, approved at the ask; `scratch/sweep-1000.log` | PASS (to `eval/results/`) | | `20261014T101001Z-vector-22688aeb.json`: Recall@5 0.909, MRR@10 0.766, faithfulness 0.889. Cost $0.1462 (likely $0.20, upper $0.47). The sweep's total is $0.383. Not covered: chunk size in the hybrid modes; the answer model's variance (one run each) |
 
 ## Port ledger
 
