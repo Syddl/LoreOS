@@ -91,6 +91,9 @@ jobs:
       - name: Frontend typecheck, tests and build
         run: npm run check:frontend
 
+      - name: README results table, glossary and links
+        run: npm run check:readme
+
   # The image builds and the stack starts healthy. Separate from checks because it builds the image every run.
   # No secrets: scripts/compose-check.yml gives every service its own database and a fake OpenAI key.
   compose:
