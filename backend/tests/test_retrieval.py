@@ -132,12 +132,15 @@ def test_the_rerank_runs_off_the_event_loop_thread(handbook, fake_embed, monkeyp
     threads = []
 
     def record(query, hits):
-        threads.append(threading.get_ident())
+        threads.append((threading.get_ident(), threading.current_thread().name))
         return hits
 
     monkeypatch.setattr(rerank, "rerank", record)
     find(DEFAULT_WORKSPACE_ID, QUESTION, k=2, mode="hybrid_rerank")  # asyncio.run's loop runs on this thread
-    assert len(threads) == 1 and threads[0] != threading.get_ident()
+    [(ident, name)] = threads
+    assert ident != threading.get_ident()
+    # Its own pool, not asyncio's default executor, which argon2 uses for logins: reranks queue among themselves.
+    assert name.startswith("rerank")
 
 
 def test_an_exact_distance_tie_orders_by_chunk_id(clean, fake_embed):

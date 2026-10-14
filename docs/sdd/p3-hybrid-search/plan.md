@@ -173,7 +173,7 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
     - `hybrid` fuses vector top `FUSE_DEPTH = 50` and `keyword_search(..., FUSE_DEPTH)` with `rrf`, and keeps the top `k`, with `score` set to the RRF score.
     - `hybrid_rerank` takes the fused top `RERANK_DEPTH = 30`, runs `await asyncio.to_thread(rerank.rerank, query, hits)`, and keeps the top `k`.
     - The `HAS_CHUNKS` short-circuit still comes first in every mode.
-    - `serving_mode()` returns `hybrid` when `DEFAULT_MODE == "hybrid_rerank"` and RERANK is off, else `DEFAULT_MODE`.
+    - `serving_mode()` returns `hybrid` when `DEFAULT_MODE == "hybrid_rerank"` and RERANK is off, else `DEFAULT_MODE`. Decision 0010 changed this to `vector`, after the comparison.
   - **`settings.rerank_on()`** reads `RERANK`: empty or `on` is True, `off` is False, and anything else raises `RuntimeError` naming the two values.
     - `startup_problems()` reads it too, so a bad value stops the api and the worker alike. A typo in `.env` should fail loudly everywhere.
   - **`answering`:**
@@ -193,7 +193,7 @@ All the tasks run in the main session, one at a time, in this order: 1.1, 1.2, 1
   - in `test_answering.py`, the existing calls get the mode, and a refusal carries it;
   - in `test_ask_api.py`, the JSON's `retrieval_mode` equals `retrieval.serving_mode()`, so the case survives the phase 3 flip;
   - in `test_rerank_switch.py`, with `DEFAULT_MODE` monkeypatched to `hybrid_rerank`:
-    - `RERANK=off` answers with `retrieval_mode == "hybrid"` and never calls `rerank.model`;
+    - `RERANK=off` answers with `retrieval_mode == "hybrid"` and never calls `rerank.model` (changed to `vector` by decision 0010, after the comparison);
     - `on` with `rerank.model` raising makes the lifespan raise with "RERANK=off" in the message;
     - `worker.main()`'s startup checks pass without calling `rerank.model` (it is set to raise);
     - `RERANK=maybe` is a startup problem;

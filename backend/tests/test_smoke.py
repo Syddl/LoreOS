@@ -108,3 +108,11 @@ def test_preflight_never_loads_the_reranker_when_the_api_would_not_use_it(db, li
     monkeypatch.setattr(rerank, "model", lambda: pytest.fail(f"loaded the reranker for {retrieval.serving_mode()} serving"))
     asyncio.run(smoke.preflight())
     assert listed == ["models"]
+
+
+def test_a_caller_that_loads_the_reranker_itself_can_skip_it_here(db, listed, monkeypatch):
+    """The evaluation's preflight loads it by mode, so a --mode vector run must not need it through smoke's."""
+    monkeypatch.setattr(retrieval, "DEFAULT_MODE", "hybrid_rerank")
+    monkeypatch.setattr(rerank, "model", lambda: pytest.fail("loaded the reranker for a caller that skips it"))
+    asyncio.run(smoke.preflight(reranker=False))
+    assert listed == ["models"]

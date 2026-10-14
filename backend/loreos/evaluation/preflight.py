@@ -37,7 +37,7 @@ async def preflight(limit: int | None, modes: tuple[str, ...]) -> tuple[str, lis
     if problems := labels.label_problems(questions, entries):
         _refuse("labels that match no section of the corpus", problems)
     try:
-        await smoke.preflight()  # the database, the migration head, and the key
+        await smoke.preflight(reranker=False)  # the database, the migration head, and the key; the model goes by mode below
     except RuntimeError as e:  # settings raises a missing key or DATABASE_URL as RuntimeError, with its fix
         raise SystemExit(f"preflight: {e}") from e
     notes = await _check_models()

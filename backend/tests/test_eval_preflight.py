@@ -104,8 +104,9 @@ def pf(tmp_path, monkeypatch):
         models_error=None, smoke_error=None, clean=True, calls=[], paid=[],
     )
 
-    async def smoke_preflight():
+    async def smoke_preflight(reranker=True):
         state.calls.append("smoke")
+        state.smoke_reranker = reranker
         if state.smoke_error:
             raise state.smoke_error
 
@@ -317,3 +318,8 @@ def test_the_plan_for_every_mode_counts_each_mode_s_calls_and_the_corpus_once(pf
         f"plan: input tokens up to about {per_call} per answer or judge call (5 passages of up to {chunking.CHUNK_TOKENS} tokens, "
         f"plus {preflight.CALL_ALLOWANCE}), {per_call * 56 * 3} in all; output tokens are not capped",
     ]
+
+
+def test_the_smoke_preflight_leaves_the_reranker_to_the_modes(pf, clean):
+    check(pf, modes=("vector",))
+    assert pf.smoke_reranker is False

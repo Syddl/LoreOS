@@ -39,7 +39,7 @@ The rule is P3 spec behaviour 9:
 
 `hybrid_rerank` beats `vector` on both: 0.924 against 0.909, and 0.855 against 0.825. `hybrid` loses to `vector` on both.
 
-**Search time** covers the question's embedding (an OpenAI round trip, about 1.3 s at p50), the queries and the rerank. It was measured on the dev machine against hosted Supabase. The rerank adds about 2.3 s at p50, from CPU inference on 30 passages.
+**Search time** covers the question's embedding (an OpenAI round trip, about 1.3 s at p50), the queries and the rerank. It was measured on the dev machine against hosted Supabase. At p50, `hybrid_rerank` takes about 2.3 s more than `vector`. The rerank itself, CPU inference on 30 passages, accounts for about 2.1 s of that (`hybrid_rerank` minus `hybrid`).
 
 ## Why
 
@@ -56,8 +56,8 @@ The rule is P3 spec behaviour 9:
 
 ## The cost, and what it does not show
 
-- **Latency.** About 2.3 s more per question at p50 on the dev machine, and p95 above 6 s. Measured one question at a time; concurrent questions share the CPU, and the api does not cap them (KNOWN-GAPS).
-- **Memory and image size.** The image grows from 93 MB to 324 MB (onnxruntime, numpy, tokenizers, the model). The api's resident memory with the model loaded was not measured.
+- **Latency.** About 2.3 s more per question than `vector` at p50 on the dev machine, and p95 above 6 s. It was measured one question at a time. Reranks run in their own pool of 2 threads, so concurrent questions queue behind each other while logins do not (KNOWN-GAPS).
+- **Memory and image size.** The image grows from 93 MB to 240 MB (onnxruntime, numpy, tokenizers, the model). The api's resident memory with the model loaded was not measured.
 - **The keyword index under RLS.** At 922 chunks the planner seq-scans, so whether `chunks_tsv` is used under `loreos_app`'s policy is unproven at scale (KNOWN-GAPS).
 - **The size of the gain.** It is small and measured on 66 answerable questions: one question of Recall@5, 0.030 of MRR@10. A larger or different corpus may show more or less.
 - **Tuning.** None was done: RRF k, the depths (50 and 30), the keyword ranking (heading words weigh as much as body words), and the reranker model are all as the spec set them. The plan's trigger for tuning, `hybrid` losing to `vector`, has fired. It is left to a later phase with its own measurement, because the default mode already wins without it.

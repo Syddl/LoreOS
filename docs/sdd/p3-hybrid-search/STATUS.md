@@ -121,13 +121,30 @@ The single carrier of state between sessions. Update it before a session ends; t
     - takes the three-row comparison from the `c221b3a` files, as decision 0010 lists them;
     - says that judge agreement is with Claude's grades (decision 0008).
 
+- **Phase 4.**
+  - **Step 9, whole-branch review** ([reviews/branch.md](reviews/branch.md)): **merge**, with 3 minors and 4 nits.
+    - The reviewer ran `check:all` twice at `47eeb97`, both green (796 backend tests).
+    - It checked every number in decisions 0009 and 0010 against the result files, the costs recomputed from `usage` included.
+  - **Step 10, fix wave**, red first:
+    - **`smoke.preflight(reranker=False)`.** The evaluation's preflight passes it, so `--mode vector` or `--mode hybrid` never needs the model.
+    - **Reranks run in their own 2-thread pool**, `retrieval.RERANK_POOL`, so logins (argon2 on asyncio's default pool) never queue behind them. The thread test asserts the pool's thread name.
+    - **The Dockerfile bakes and chowns the model in one layer**, before the rest of the source. The image went from 324 MB to 240 MB, and `check:compose` passes again (`scratch/check-compose-2.log`).
+    - **The nits:**
+      - the latency wording (2.3 s over `vector`, 2.1 s for the rerank alone);
+      - the plan's two lines about the fallback;
+      - the CI comment;
+      - the KNOWN-GAPS rows on the reranker and the `eval-*` workspaces.
+
 ## Next step
 
-Phase 4: the whole-branch review by an independent reviewer (step 9), then the fix wave, the PR and CI. Merge only on the operator's yes.
+Phase 4: claim-green on the fix wave's pushed tip, the PR, and CI. Merge only on the operator's yes.
 
 ## Blockers
 
-None. Every paid run in P3 is done. The operator decides on the vector fallback (decision 0010) and on pruning the three unused `eval-*` workspaces.
+None. Every paid run in P3 is done. The operator decides three things:
+1. **The default and the fallback** (decision 0010): `hybrid_rerank`, and `RERANK=off` serving `vector`.
+2. **Pruning the three unused `eval-*` workspaces**, which deletes data.
+3. **Whether to re-sweep chunk size in `hybrid_rerank` mode**, about $0.40. Decision 0009's reopen condition is half met now that the default is not `vector`. The default is to skip it: the 512-token reranker cut favours 500-token chunks anyway.
 
 ## Verification ledger
 

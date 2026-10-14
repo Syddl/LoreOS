@@ -18,8 +18,8 @@ jobs:
     name: Checks
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # tests/test_rerank.py loads the real reranker model; fastembed keeps it here, and the cache step below keeps it
-    # between runs. An absolute path: fastembed does not expand ~.
+    # Many backend tests load the real reranker model, since the default mode reranks (decision 0010); fastembed keeps
+    # it here, and the cache step below keeps it between runs. An absolute path: fastembed does not expand ~.
     env:
       FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed-cache
 

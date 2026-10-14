@@ -39,9 +39,10 @@ incident ticket.
 QUESTIONS = [("When do production deploys happen?", True), ("What is the office Wi-Fi password?", False)]
 
 
-async def preflight() -> None:
+async def preflight(reranker: bool = True) -> None:
+    """reranker=False leaves the model to a caller that loads it itself: the evaluation, by the modes it runs."""
     settings.openai_api_key()  # raises with the fix when unset
-    if retrieval.serving_mode() == "hybrid_rerank":  # loaded now, free, rather than after ingest has paid
+    if reranker and retrieval.serving_mode() == "hybrid_rerank":  # loaded now, free, rather than after ingest has paid
         try:
             rerank.model()
         except RuntimeError as e:

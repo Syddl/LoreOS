@@ -6,6 +6,7 @@ candidates rescored by the local cross-encoder.
 
 import asyncio
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from sqlalchemy import text
@@ -17,6 +18,10 @@ MODES = ("vector", "hybrid", "hybrid_rerank")
 DEFAULT_MODE = "hybrid_rerank"  # decision 0010, from the committed three-mode comparison
 FUSE_DEPTH = 50  # hits taken from each ranking before fusion
 RERANK_DEPTH = 30  # fused candidates the cross-encoder rescores
+# Reranks get their own threads, not asyncio's default executor, which argon2 uses for logins: under load, questions
+# queue behind each other and logins do not. onnxruntime already spreads one rerank over every core.
+# ponytail: 2 threads, a fixed cap; raise it (or move reranking out of the api) if questions queue on a large host.
+RERANK_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="rerank")
 
 HAS_CHUNKS = text("select exists (select 1 from loreos.chunks where workspace_id = :w)")
 NEAREST = text(
@@ -93,7 +98,8 @@ async def search(session: AsyncConnection, workspace_id: uuid.UUID, query: str, 
     if mode == "hybrid":
         return fused[:k]
     # Seconds of CPU: in a thread, so the event loop keeps serving other requests meanwhile.
-    return (await asyncio.to_thread(rerank.rerank, query, fused[:RERANK_DEPTH]))[:k]
+    reranked = await asyncio.get_running_loop().run_in_executor(RERANK_POOL, rerank.rerank, query, fused[:RERANK_DEPTH])
+    return reranked[:k]
 
 
 async def _nearest(session: AsyncConnection, workspace_id: uuid.UUID, vector: list[float], n: int) -> list[Hit]:
