@@ -56,9 +56,30 @@ The single carrier of state between sessions. Update it before a session ends; t
   - **The redproofs** for the thread, the tiebreak and the license fallback all pass.
   - **The index plan** under RLS moves to phase 3 step 2, against real data on Supabase.
 
+- **Phase 3, operator's yes on 2026-10-14** ("Migrate, then run"). Each paid command still asks at the guard.
+  - **Step 2 done.** `npm run db:migrate` took Supabase (PG 17.11) to `0003_keyword_search`, and `db:verify-rls` printed `ok`, the `heading_text` check included. The free reads, in `scratch/supabase-0003.log`:
+    - 0 of 922 chunks have a null `tsv`;
+    - the database is 32 MB;
+    - the keyword query runs as `loreos_app` with the RLS filter, in 17 ms. At 922 chunks the planner seq-scans, so index use under RLS is unproven at scale.
+  - **Step 3 done.** All three dry runs passed at `7b236d2` (`scratch/dry-{250,500,1000}.log`), with every preflight step and new workspaces to build. Priced from their plans:
+
+    | Run | Workspace | Corpus embedding | Upper bound | Likely (P2's actuals were about 42% of the bound) |
+    |---|---|---|---|---|
+    | 250/25 | `eval-f09e96cf6f39` | 201,229 tokens | $0.20 | about $0.09 |
+    | 500/50 | `eval-093199cc80a6` | 195,274 tokens | $0.29 | about $0.13 |
+    | 1000/100 | `eval-2f5e71f82f9c` | 189,103 tokens | $0.47 | about $0.20 |
+
+    The sweep's upper bound is $0.96. Spent before P3: $0.28, under the $5 cap.
+  - **Step 4, the sweep.** Three paid runs at the commit that records this table, launched one at a time, detached, each approved at the guard:
+    - run ids `sweep-250`, `sweep-500` and `sweep-1000`;
+    - logs in `scratch/sweep-<tokens>.log`;
+    - output in `eval/results/`, or `docs/sdd/p2-evaluation/scratch/` when a destination rule fails.
+
+    STATUS is not touched again until the third run has written its file.
+
 ## Next step
 
-Phase 3, after the operator's yes: `npm run db:migrate` on Supabase, then the dry runs of the chunk sweep.
+Phase 3 step 4: the sweep, three paid runs. Then decision 0009.
 
 ## Blockers
 
