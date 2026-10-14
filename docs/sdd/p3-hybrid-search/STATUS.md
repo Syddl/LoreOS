@@ -162,6 +162,7 @@ None. Every paid run in P3 is done. The operator decides three things:
 | 2026-10-14 (by hand, live) | p3-hybrid-search | c221b3a | `compare-rerank-retry` (`--mode hybrid_rerank`), approved at the ask; `scratch/compare-rerank-retry.log` | PASS (to `eval/results/`) | | `20261014T123854Z-hybrid_rerank-c221b3a3.json`: Recall@5 0.924, MRR@10 0.855, faithfulness 0.968, search p50 3655 ms. Cost $0.1383. Not covered: latency on a deploy host; concurrent questions |
 | 2026-10-14 (by hand) | p3-hybrid-search | 7b278eb | `npm run check:compose` locally (its own CI job), after a retry: the first build hit a Docker Hub TLS timeout; `scratch/check-compose.log` | PASS | | The api is healthy with `HF_HUB_OFFLINE=1`, and the image is 324 MB. Redproof (an empty `/app/fastembed`, so no model) PASS: the api fails at startup. Not covered: CI's run of the same job |
 | 2026-10-14T13:03:31.008Z | p3-hybrid-search | 7b278eb6 | `npm run check:all` | PASS | 345.3 s | check:compose (its own CI job; run locally and redproved by hand); real OpenAI and Supabase (the paid runs are ledger rows); CI on Linux |
+| 2026-10-14T13:30:49.524Z | p3-hybrid-search | 3573ff3a | `npm run check:all` | PASS | 337.1 s | check:compose (its own CI job; run locally by hand at this tree); real OpenAI and Supabase (the paid runs are ledger rows); CI on Linux |
 
 ## Port ledger
 
